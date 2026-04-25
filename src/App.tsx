@@ -14,184 +14,198 @@ const db = getDatabase(app);
 
 const ADMIN_NAME = "Touqeer Iqbal Baghoor";
 const ADMIN_WA = "00923015800630";
-const ADMIN_PASS = "1122"; // Aapka Password
+const ADMIN_PASS = "1122";
 
-export default function AdhiKotProFinal() {
+export default function AdhiKotUltimateCricket() {
   const [match, setMatch] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [view, setView] = useState<'live' | 'history' | 'setup'>('live');
   const [isAdmin, setIsAdmin] = useState(false);
   const [passInp, setPassInp] = useState("");
   const [adminPic, setAdminPic] = useState<string>("");
-  const [animation, setAnimation] = useState("");
+  const [ani, setAni] = useState("");
 
   useEffect(() => {
     onValue(ref(db, 'liveMatch'), (snap) => setMatch(snap.val()));
     onValue(ref(db, 'matchHistory'), (snap) => {
       const data = snap.val();
-      if (data) setHistory(Object.values(data));
+      if (data) {
+        const list = Object.keys(data).map(key => ({ ...data[key], dbKey: key }));
+        setHistory(list);
+      } else { setHistory([]); }
     });
-    const savedPic = localStorage.getItem("admin_dp");
-    if (savedPic) setAdminPic(savedPic);
+    setAdminPic(localStorage.getItem("admin_dp") || "");
   }, []);
 
-  const handlePicUpload = (e: any) => {
-    const file = e.target.files[0];
+  const handlePic = (e: any) => {
     const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result as string;
-      setAdminPic(base64);
-      localStorage.setItem("admin_dp", base64);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const checkAdmin = () => {
-    if (passInp === ADMIN_PASS) { setIsAdmin(true); setPassInp(""); }
-    else { alert("Wrong Password!"); }
+    reader.onload = () => { setAdminPic(reader.result as string); localStorage.setItem("admin_dp", reader.result as string); };
+    reader.readAsDataURL(e.target.files[0]);
   };
 
   const handleCreate = (e: any) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const pA = (fd.get("pA") as string).split(",").map(n => ({ name: n.trim(), runs: 0, balls: 0 }));
-    const pB = (fd.get("pB") as string).split(",").map(n => ({ name: n.trim(), runs: 0, balls: 0 }));
+    const createPlayers = (str: string) => str.split(",").map(n => ({ 
+      name: n.trim(), runs: 0, balls: 0, wa: "923" + Math.floor(Math.random()*10000000) 
+    }));
 
     const mData = {
-      league: fd.get("league"),
-      ground: fd.get("ground"),
-      info: `${fd.get("date")} | ${fd.get("time")}`,
-      oversTotal: parseInt(fd.get("ovs") as string),
-      teamA: { name: fd.get("tA"), players: pA },
-      teamB: { name: fd.get("tB"), players: pB },
-      score: 0, wickets: 0, balls: 0, overs: 0,
-      striker: { name: pA[0].name, idx: 0, runs: 0, balls: 0 },
-      nonStriker: { name: pA[1].name, idx: 1, runs: 0, balls: 0 },
-      bowler: { name: pB[0].name, runs: 0, wkts: 0, balls: 0 },
-      status: "Live"
+      league: fd.get("lg"), ground: fd.get("gd"), umpire: fd.get("um"),
+      toss: `${fd.get("tw")} won & elected to ${fd.get("dec")}`,
+      teamA: { name: fd.get("tA"), players: createPlayers(fd.get("pA") as string) },
+      teamB: { name: fd.get("tB"), players: createPlayers(fd.get("pB") as string) },
+      score: 0, wkts: 0, balls: 0, ovs: 0, target: 0,
+      striker: null, nonStriker: null, bowler: null, status: "Live"
     };
     set(ref(db, 'liveMatch'), mData);
     setView('live');
   };
 
   const updateScore = (r: number, t = "n") => {
-    if (!match || !isAdmin) return;
+    if (!match || !isAdmin || !match.striker) return;
     let m = { ...match };
-    if (t === "W") { m.wickets += 1; m.balls += 1; setAnimation("OUT! ☝️"); }
-    else if (t === "WD" || t === "NB") { m.score += (r + 1); setAnimation(t === "NB" ? "FREE HIT! 🆓" : "WIDE! ⚪"); }
+    if (t === "W") { m.wkts += 1; m.balls += 1; setAni("OUT! ☝️"); m.striker = null; }
+    else if (t === "WD" || t === "NB") { m.score += (r + 1); setAni(t); }
     else {
       m.score += r; m.balls += 1; m.striker.runs += r; m.striker.balls += 1;
-      if (r === 4) setAnimation("FOUR! 🏏");
-      if (r === 6) setAnimation("SIXER! 🚀");
-      if (r % 2 !== 0) { let temp = m.striker; m.striker = m.nonStriker; m.nonStriker = temp; }
+      if (r === 4) setAni("FOUR! 🏏"); if (r === 6) setAni("SIX! 🚀");
+      if (r % 2 !== 0) [m.striker, m.nonStriker] = [m.nonStriker, m.striker];
     }
-    if (m.balls >= 6) { m.overs += 1; m.balls = 0; let temp = m.striker; m.striker = m.nonStriker; m.nonStriker = temp; }
+    if (m.balls >= 6) { m.ovs += 1; m.balls = 0; [m.striker, m.nonStriker] = [m.nonStriker, m.striker]; m.bowler = null; }
     set(ref(db, 'liveMatch'), m);
-    setTimeout(() => setAnimation(""), 2000);
+    setTimeout(() => setAni(""), 2000);
+  };
+
+  const calcRR = () => {
+    const totalBalls = (match.ovs * 6) + match.balls;
+    return totalBalls > 0 ? ((match.score / totalBalls) * 6).toFixed(2) : "0.00";
   };
 
   return (
     <div style={s.body}>
-      {/* PERMANENT ADMIN HEADER */}
-      <div style={s.topBar}>
-        <div style={s.adminFlex}>
-          <label style={s.dpLabel}>
-            <img src={adminPic || "https://cdn-icons-png.flaticon.com/512/149/149071.png"} style={s.dp}/>
-            <input type="file" hidden onChange={handlePicUpload} />
-          </label>
+      {/* HEADER */}
+      <div style={s.top}>
+        <div style={s.adminRow}>
+          <label><img src={adminPic || "https://via.placeholder.com/50"} style={s.dp}/><input type="file" hidden onChange={handlePic}/></label>
           <div>
-            <div style={s.adminName}>{ADMIN_NAME}</div>
-            <a href={`https://wa.me/${ADMIN_WA}`} style={s.waLink}>🟢 WhatsApp Admin</a>
+            <div style={s.aName}>{ADMIN_NAME}</div>
+            <a href={`https://wa.me/${ADMIN_WA}`} style={s.waLink}>🟢 Admin WhatsApp</a>
           </div>
         </div>
         <div style={s.nav}>
-          <button onClick={() => setView('live')} style={s.navBtn}>Live</button>
-          <button onClick={() => setView('history')} style={s.navBtn}>History</button>
-          {!isAdmin && <input placeholder="Pass" type="password" style={s.passInp} onChange={e=>setPassInp(e.target.value)} onBlur={checkAdmin}/>}
-          {isAdmin && <button onClick={() => setView('setup')} style={s.addBtn}>+ Match</button>}
+          <button onClick={() => setView('live')} style={s.nBtn}>Live</button>
+          <button onClick={() => setView('history')} style={s.nBtn}>History</button>
+          {isAdmin ? <button onClick={() => setView('setup')} style={s.addB}>+ Match</button> : 
+          <input placeholder="Pass" type="password" style={s.ps} onChange={e => e.target.value === ADMIN_PASS && setIsAdmin(true)}/>}
         </div>
       </div>
 
+      {/* SETUP */}
       {view === 'setup' && isAdmin && (
         <form onSubmit={handleCreate} style={s.form}>
-          <input name="league" placeholder="League Name" style={s.inp} required />
-          <input name="ground" placeholder="Ground Name" style={s.inp} required />
-          <div style={{display:'flex', gap:'5px'}}><input name="date" type="date" style={s.inp}/><input name="time" type="time" style={s.inp}/></div>
-          <input name="ovs" placeholder="Total Overs" type="number" style={s.inp} required />
-          <input name="tA" placeholder="Batting Team" style={s.inp} required />
-          <textarea name="pA" placeholder="Batsmen (Ali, Ahmed...)" style={s.area} required />
-          <input name="tB" placeholder="Bowling Team" style={s.inp} required />
-          <textarea name="pB" placeholder="Bowlers (Zaid, Khan...)" style={s.area} required />
-          <button type="submit" style={s.mainBtn}>START LIVE MATCH</button>
+          <input name="lg" placeholder="League Name" style={s.in} required />
+          <input name="um" placeholder="Umpire Name" style={s.in} required />
+          <input name="gd" placeholder="Ground" style={s.in} required />
+          <div style={s.flex}><input name="tw" placeholder="Toss Winner" style={s.in}/><input name="dec" placeholder="Bat/Bowl" style={s.in}/></div>
+          <input name="tA" placeholder="Batting Team" style={s.in} required />
+          <textarea name="pA" placeholder="Batsmen Names (Comma separated)" style={s.ar} required />
+          <input name="tB" placeholder="Bowling Team" style={s.in} required />
+          <textarea name="pB" placeholder="Bowlers Names (Comma separated)" style={s.ar} required />
+          <button type="submit" style={s.mBtn}>START MATCH</button>
         </form>
       )}
 
+      {/* LIVE */}
       {view === 'live' && match && (
-        <div style={s.liveCard}>
-          <div style={s.matchMeta}>{match.league} | {match.ground} <br/> {match.info}</div>
-          <div style={s.scoreBig}>{match.score}/{match.wickets} <small style={{fontSize:'20px'}}>({match.overs}.{match.balls})</small></div>
-          <div style={s.statsBox}>
-            <div style={s.statRow}>🏏 {match.striker.name}* <span>{match.striker.runs}({match.striker.balls})</span></div>
-            <div style={s.statRow}>🏏 {match.nonStriker.name} <span>{match.nonStriker.runs}({match.nonStriker.balls})</span></div>
-            <div style={s.statRowBowl}>⚪ Bowler: {match.bowler.name}</div>
+        <div style={s.lCard}>
+          <div style={s.liveTag}><span>●</span> LIVE</div>
+          <div style={s.meta}>{match.league} | {match.ground} <br/> Umpire: {match.umpire}</div>
+          <div style={s.score}>{match.score}/{match.wkts} <small>({match.ovs}.{match.balls})</small></div>
+          <div style={s.rr}>Run Rate: {calcRR()} | {match.toss}</div>
+
+          <div style={s.stBox}>
+            {['striker', 'nonStriker'].map(key => (
+              <div key={key} style={s.stRow}>
+                {match[key] ? `🏏 ${match[key].name}* ${match[key].runs}(${match[key].balls})` : 
+                isAdmin ? <select onChange={e => {
+                  let m = {...match}; m[key] = match.teamA.players[e.target.selectedIndex-1]; set(ref(db, 'liveMatch'), m);
+                }} style={s.sel}><option>Select {key}</option>{match.teamA.players.map((p:any,i:number)=><option key={i}>{p.name}</option>)}</select> : `Waiting for ${key}...`}
+                {match[key] && <a href={`https://wa.me/${match[key].wa}`} style={s.pWa}>📞</a>}
+              </div>
+            ))}
+            <div style={s.stRowBowl}>
+              {match.bowler ? `⚪ Bowler: ${match.bowler.name}` : 
+              isAdmin ? <select onChange={e => {
+                let m = {...match}; m.bowler = match.teamB.players[e.target.selectedIndex-1]; set(ref(db, 'liveMatch'), m);
+              }} style={s.sel}><option>Select Bowler</option>{match.teamB.players.map((p:any,i:number)=><option key={i}>{p.name}</option>)}</select> : "Selecting Bowler..."}
+            </div>
           </div>
+
           {isAdmin && (
-            <div style={s.adminControls}>
-              {[0,1,2,3,4,6].map(n => <button key={n} onClick={()=>updateScore(n)} style={s.scBtn}>{n}</button>)}
-              <button onClick={()=>updateScore(0,"WD")} style={s.exBtn}>WD</button>
-              <button onClick={()=>updateScore(0,"NB")} style={s.exBtn}>NB</button>
-              <button onClick={()=>updateScore(0,"W")} style={s.wktBtn}>WICKET</button>
-              <button onClick={() => { push(ref(db, 'matchHistory'), match); remove(ref(db, 'liveMatch')); }} style={s.endBtn}>END & SAVE RECORD</button>
+            <div style={s.ctrl}>
+              {[0,1,2,3,4,6].map(n => <button key={n} onClick={()=>updateScore(n)} style={s.scB}>{n}</button>)}
+              <button onClick={()=>updateScore(0,"WD")} style={s.exB}>WD</button>
+              <button onClick={()=>updateScore(0,"NB")} style={s.exB}>NB</button>
+              <button onClick={()=>updateScore(0,"W")} style={s.wB}>WICKET</button>
+              <button onClick={() => { push(ref(db, 'matchHistory'), match); remove(ref(db, 'liveMatch')); }} style={s.enB}>END & SAVE</button>
             </div>
           )}
         </div>
       )}
 
+      {/* HISTORY */}
       {view === 'history' && (
         <div style={{padding:'15px'}}>
-          <h2 style={{color:'#f5cd11', fontSize:'18px'}}>Match Archives</h2>
           {history.reverse().map((h, i) => (
-            <div key={i} style={s.histCard}>
-              <div style={{fontWeight:'bold'}}>{h.teamA.name} vs {h.teamB.name}</div>
-              <div style={{fontSize:'12px', color:'#94a3b8'}}>{h.league} | {h.info}</div>
-              <div style={{color:'#f5cd11', marginTop:'5px'}}>Final: {h.score}/{h.wickets} ({h.overs} ovs)</div>
+            <div key={i} style={s.hCard}>
+              <div style={s.flex}>
+                <div><b>{h.teamA.name} vs {h.teamB.name}</b><br/><small>{h.league}</small></div>
+                {isAdmin && <button onClick={()=>remove(ref(db, `matchHistory/${h.dbKey}`))} style={s.del}>Del</button>}
+              </div>
+              <div style={{color:'#f5cd11', marginTop:'5px'}}>Final Score: {h.score}/{h.wkts} ({h.ovs} ovs)</div>
             </div>
           ))}
         </div>
       )}
 
-      {animation && <div style={s.ani}>{animation}</div>}
+      {ani && <div style={s.aniBox}>{ani}</div>}
     </div>
   );
 }
 
 const s: any = {
   body: { background: '#0a0f1e', minHeight: '100vh', color: 'white', fontFamily: 'sans-serif' },
-  topBar: { background: '#161d31', padding: '10px', borderBottom: '2px solid #f5cd11', position: 'sticky', top: 0, zIndex: 10 },
-  adminFlex: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' },
-  dpLabel: { cursor: 'pointer' },
-  dp: { width: '50px', height: '50px', borderRadius: '50%', border: '2px solid #f5cd11', objectFit: 'cover' },
-  adminName: { fontSize: '14px', fontWeight: 'bold', color: '#f5cd11' },
-  waLink: { fontSize: '11px', color: '#25D366', textDecoration: 'none' },
-  nav: { display: 'flex', gap: '8px' },
-  navBtn: { background: '#334155', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '5px' },
-  addBtn: { background: '#f5cd11', color: 'black', border: 'none', padding: '6px 12px', borderRadius: '5px', fontWeight: 'bold' },
-  passInp: { width: '60px', background: '#0f172a', border: '1px solid #334155', color: 'white', fontSize: '10px', padding: '5px', borderRadius: '4px' },
-  form: { padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' },
-  inp: { padding: '12px', background: '#161d31', border: '1px solid #334155', color: 'white', borderRadius: '8px' },
-  area: { padding: '12px', background: '#161d31', border: '1px solid #334155', color: 'white', borderRadius: '8px', height: '60px' },
-  mainBtn: { background: '#f5cd11', color: 'black', padding: '15px', border: 'none', borderRadius: '10px', fontWeight: 'bold' },
-  liveCard: { margin: '15px', padding: '20px', background: 'linear-gradient(145deg, #1e293b, #0f172a)', borderRadius: '25px', border: '1px solid #334155' },
-  matchMeta: { textAlign: 'center', fontSize: '11px', color: '#94a3b8' },
-  scoreBig: { fontSize: '65px', textAlign: 'center', fontWeight: 'bold', margin: '10px 0' },
-  statsBox: { background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '15px' },
-  statRow: { display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #334155' },
-  statRowBowl: { padding: '8px 0', color: '#f5cd11', fontSize: '13px' },
-  adminControls: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '15px' },
-  scBtn: { padding: '12px', background: 'white', color: 'black', border: 'none', borderRadius: '8px', fontWeight: 'bold' },
-  exBtn: { background: '#f5cd11', color: 'black', border: 'none', borderRadius: '8px', fontWeight: 'bold' },
-  wktBtn: { gridColumn: 'span 2', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold' },
-  endBtn: { gridColumn: 'span 4', background: '#334155', color: '#94a3b8', padding: '10px', border: 'none', borderRadius: '8px', marginTop: '10px' },
-  histCard: { background: '#161d31', padding: '15px', borderRadius: '12px', marginBottom: '10px', borderLeft: '4px solid #f5cd11' },
-  ani: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '40px', color: '#f5cd11', fontWeight: 'bold', zIndex: 100 }
+  top: { background: '#161d31', padding: '10px', borderBottom: '2px solid #f5cd11', position: 'sticky', top: 0, zIndex: 10 },
+  adminRow: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' },
+  dp: { width: '45px', height: '45px', borderRadius: '50%', border: '2px solid #f5cd11', objectFit: 'cover' },
+  aName: { fontSize: '13px', fontWeight: 'bold', color: '#f5cd11' },
+  waLink: { fontSize: '10px', color: '#25D366', textDecoration: 'none' },
+  nav: { display: 'flex', gap: '5px' },
+  nBtn: { background: '#334155', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', fontSize: '12px' },
+  addB: { background: '#f5cd11', color: 'black', border: 'none', padding: '5px 10px', borderRadius: '4px', fontWeight: 'bold' },
+  ps: { width: '50px', background: 'none', border: '1px solid #334155', color: 'white', padding: '2px' },
+  form: { padding: '15px', display: 'flex', flexDirection: 'column', gap: '8px' },
+  in: { padding: '10px', background: '#161d31', border: '1px solid #334155', color: 'white', borderRadius: '5px' },
+  ar: { padding: '10px', background: '#161d31', border: '1px solid #334155', color: 'white', borderRadius: '5px', height: '50px' },
+  mBtn: { background: '#f5cd11', color: 'black', padding: '12px', border: 'none', borderRadius: '8px', fontWeight: 'bold' },
+  lCard: { margin: '15px', padding: '20px', background: '#161d31', borderRadius: '20px', border: '1px solid #334155' },
+  liveTag: { color: '#ef4444', fontSize: '12px', fontWeight: 'bold', animation: 'blink 1s infinite' },
+  meta: { textAlign: 'center', fontSize: '11px', color: '#94a3b8' },
+  score: { fontSize: '55px', textAlign: 'center', fontWeight: 'bold', margin: '10px 0' },
+  rr: { textAlign: 'center', fontSize: '12px', color: '#f5cd11' },
+  stBox: { marginTop: '15px', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '10px' },
+  stRow: { display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #334155', alignItems: 'center' },
+  stRowBowl: { padding: '8px 0', color: '#f5cd11' },
+  sel: { background: '#0a0f1e', color: 'white', border: '1px solid #f5cd11', fontSize: '11px' },
+  pWa: { textDecoration: 'none', background: '#25D366', borderRadius: '50%', padding: '2px 5px', fontSize: '10px' },
+  ctrl: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '15px' },
+  scB: { padding: '12px', background: 'white', color: 'black', border: 'none', borderRadius: '5px', fontWeight: 'bold' },
+  exB: { background: '#f5cd11', color: 'black', border: 'none', borderRadius: '5px', fontWeight: 'bold' },
+  wB: { gridColumn: 'span 2', background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px' },
+  enB: { gridColumn: 'span 4', background: '#334155', color: '#94a3b8', border: 'none', padding: '8px', borderRadius: '5px' },
+  hCard: { background: '#161d31', padding: '12px', borderRadius: '10px', marginBottom: '8px', borderLeft: '4px solid #f5cd11' },
+  del: { background: '#ef4444', color: 'white', border: 'none', fontSize: '10px', borderRadius: '3px' },
+  flex: { display: 'flex', justifyContent: 'space-between', gap: '5px' },
+  aniBox: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '40px', color: '#f5cd11', zIndex: 100 }
 };
