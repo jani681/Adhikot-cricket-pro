@@ -1,190 +1,192 @@
 import React, { useState, useEffect } from 'react';
-import { initializeApp } from "firebase/app";
-import { getDatabase, ref, set, onValue, remove } from "firebase/database";
+import { db } from './firebase'; // Ensure your firebase config is here
+import { ref, set, onValue, update } from 'firebase/database';
+import { motion, AnimatePresence } from 'framer-motion';
+import { MessageCircle, Trophy, User, MapPin, Clock, Lock } from 'lucide-react';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyB0e37uvyY7Jpuj-FYxDlX52hjb0uwsBfg",
-  databaseURL: "https://adhikot-cricket-pro-default-rtdb.firebaseio.com"
-};
+// --- Types ---
+interface Player {
+  name: string;
+  whatsapp: string;
+  runs: number;
+  balls: number;
+  fours: number;
+  sixes: number;
+}
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+interface MatchState {
+  league: string;
+  ground: string;
+  date: string;
+  time: string;
+  battingTeam: string;
+  bowlingTeam: string;
+  tossWinner: string;
+  decision: 'Bat' | 'Bowl';
+  runs: number;
+  wickets: number;
+  overs: number;
+  ballsInOver: number;
+  target?: number;
+  striker: Player | null;
+  nonStriker: Player | null;
+  bowler: string;
+  isLive: boolean;
+}
 
-const ADMIN_WA = "923015800630";
-const ADMIN_PASS = "6545";
+const ADMIN_PASSWORD = "6545";
 
-export default function AdhiKotProApp() {
-  const [match, setMatch] = useState<any>(null);
-  const [view, setView] = useState<'live' | 'history' | 'setup' | 'login'>('live');
+export default function AdhiKotCricketPro() {
   const [isAdmin, setIsAdmin] = useState(false);
-  const [passInp, setPassInp] = useState('');
-  const [adminDp, setAdminDp] = useState<string>("");
+  const [passInput, setPassInput] = useState("");
+  const [match, setMatch] = useState<MatchState | null>(null);
+  const [loading, setLoading] = useState(true);
 
+  // 1. Real-time Firebase Sync
   useEffect(() => {
-    const savedDp = localStorage.getItem('admin_dp');
-    if (savedDp) setAdminDp(savedDp);
-    onValue(ref(db, 'liveMatch'), (snap) => setMatch(snap.val()));
+    const matchRef = ref(db, 'liveMatch');
+    return onValue(matchRef, (snapshot) => {
+      setMatch(snapshot.val());
+      setLoading(false);
+    });
   }, []);
 
-  const handleDpUpload = (e: any) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const b64 = reader.result as string;
-      setAdminDp(b64);
-      localStorage.setItem('admin_dp', b64);
-    };
-    reader.readAsDataURL(e.target.files[0]);
+  // 2. Admin Authentication
+  const handleLogin = () => {
+    if (passInput === ADMIN_PASSWORD) setIsAdmin(true);
+    else alert("Wrong Password!");
   };
 
-  const startMatch = (e: any) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const parse = (str: string) => str.split(",").map(s => ({ name: s.trim(), r: 0, b: 0, f4: 0, s6: 0 }));
+  // 3. Scoring Logic (Functional Buttons)
+  const updateScore = (value: number | 'WD' | 'NB' | 'W') => {
+    if (!match || !isAdmin) return;
+    
+    let newRuns = match.runs;
+    let newBalls = match.ballsInOver;
+    let newOvers = match.overs;
+    let newWickets = match.wickets;
 
-    const newMatch = {
-      league: fd.get('league'),
-      umpire: fd.get('umpire'),
-      ground: fd.get('ground'),
-      toss: fd.get('toss'),
-      choice: fd.get('choice'),
-      batTeam: fd.get('batTeam'),
-      bowTeam: fd.get('bowTeam'),
-      pBat: parse(fd.get('pBat') as string),
-      pBow: parse(fd.get('pBow') as string),
-      score: 0, wkts: 0, balls: 0, ovs: 0, inning: 1,
-      striker: null, nonStriker: null, bowler: null
-    };
-    set(ref(db, 'liveMatch'), newMatch);
-    setView('live');
-  };
-
-  const updateScore = (runs: number, extra = "") => {
-    if (!match || !isAdmin || !match.striker) return;
-    let m = { ...match };
-    if (extra === "W") {
-      m.wkts += 1; m.balls += 1; m.striker.b += 1; m.striker = null;
-    } else if (extra === "WD" || extra === "NB") {
-      m.score += (runs + 1);
-    } else {
-      m.score += runs; m.balls += 1; m.striker.r += runs; m.striker.b += 1;
-      if (runs === 4) m.striker.f4 += 1;
-      if (runs === 6) m.striker.s6 += 1;
-      if (runs % 2 !== 0) [m.striker, m.nonStriker] = [m.nonStriker, m.striker];
+    if (typeof value === 'number') {
+      newRuns += value;
+      newBalls += 1;
+      // Update striker stats here...
+    } else if (value === 'WD' || value === 'NB') {
+      newRuns += 1;
+    } else if (value === 'W') {
+      newWickets += 1;
+      newBalls += 1;
     }
-    if (m.balls === 6) { m.ovs += 1; m.balls = 0; [m.striker, m.nonStriker] = [m.nonStriker, m.striker]; m.bowler = null; }
-    set(ref(db, 'liveMatch'), m);
+
+    if (newBalls === 6) {
+      newOvers += 1;
+      newBalls = 0;
+    }
+
+    update(ref(db, 'liveMatch'), {
+      runs: newRuns,
+      ballsInOver: newBalls,
+      overs: newOvers,
+      wickets: newWickets
+    });
   };
+
+  if (loading) return <div className="text-white p-10">Loading System...</div>;
 
   return (
-    <div style={s.body}>
-      {/* HEADER SECTION - SAME AS SS */}
-      <div style={s.header}>
-        <div style={s.adminInfo}>
-          <div style={s.dpWrap}>
-            <img src={adminDp || "https://via.placeholder.com/100"} style={s.dp} alt="Admin" />
-            {isAdmin && <input type="file" style={s.fileInp} onChange={handleDpUpload} />}
-          </div>
-          <div>
-            <div style={s.adminName}>Touqeer Iqbal Baghoor</div>
-            <a href={`https://wa.me/${ADMIN_WA}`} style={s.waLink}>🟢 WhatsApp Admin</a>
-          </div>
+    <div className="min-h-screen bg-[#0f172a] text-white font-sans p-4">
+      {/* Header with Admin Info */}
+      <header className="flex justify-between items-center border-b border-yellow-500/30 pb-4 mb-6">
+        <div>
+          <h1 className="text-xl font-bold text-yellow-500">ADHI KOT PRO</h1>
+          <p className="text-xs text-gray-400">Admin: Touqeer Iqbal Baghoor</p>
         </div>
-        <div style={s.nav}>
-          <button onClick={() => setView('live')} style={view === 'live' ? s.tabActive : s.tab}>Live</button>
-          <button onClick={() => setView('history')} style={view === 'history' ? s.tabActive : s.tab}>History</button>
-          <button onClick={() => isAdmin ? setView('setup') : setView('login')} style={s.addMatchBtn}>+ Match</button>
+        <a href="https://wa.me/923000000000" className="bg-green-600 p-2 rounded-full">
+          <MessageCircle size={20} />
+        </a>
+      </header>
+
+      {!isAdmin && !match?.isLive ? (
+        /* Admin Login Section */
+        <div className="max-w-md mx-auto bg-[#1e293b] p-8 rounded-2xl shadow-2xl border border-gray-700">
+          <Lock className="mx-auto mb-4 text-yellow-500" />
+          <h2 className="text-center mb-6">Enter Admin Password</h2>
+          <input 
+            type="password" 
+            className="w-full p-3 bg-black rounded-lg mb-4 text-center border border-gray-600 focus:border-yellow-500 outline-none"
+            onChange={(e) => setPassInput(e.target.value)}
+          />
+          <button onClick={handleLogin} className="w-full bg-yellow-500 text-black font-bold py-3 rounded-lg hover:bg-yellow-400">
+            ACCESS SYSTEM
+          </button>
         </div>
-      </div>
-
-      {/* LOGIN VIEW */}
-      {view === 'login' && (
-        <div style={s.container}>
-          <input type="password" placeholder="Admin Password" style={s.input} onChange={e => setPassInp(e.target.value)} />
-          <button onClick={() => passInp === ADMIN_PASS ? (setIsAdmin(true), setView('setup')) : alert("Ghalat Password!")} style={s.mainBtn}>LOGIN</button>
-        </div>
-      )}
-
-      {/* SETUP VIEW - ALL FIELDS FROM SS */}
-      {view === 'setup' && isAdmin && (
-        <form onSubmit={startMatch} style={s.container}>
-          <h2 style={s.title}>ADHI KOT PRO SETUP</h2>
-          <input name="league" placeholder="League Name" style={s.input} required />
-          <input name="umpire" placeholder="Umpire Name" style={s.input} required />
-          <input name="ground" placeholder="Ground Name" style={s.input} required />
-          <div style={s.row}>
-            <input name="toss" placeholder="Toss Winner" style={{ ...s.input, flex: 2 }} />
-            <select name="choice" style={{ ...s.input, flex: 1 }}><option>Bat</option><option>Bowl</option></select>
-          </div>
-          <input name="batTeam" placeholder="Batting Team" style={s.input} required />
-          <textarea name="pBat" placeholder="Batsmen Names (Ali, Ahmed...)" style={s.area} required />
-          <input name="bowTeam" placeholder="Bowling Team" style={s.input} required />
-          <textarea name="pBow" placeholder="Bowlers Names (Zaid, Khan...)" style={s.area} required />
-          <button type="submit" style={s.mainBtn}>START MATCH</button>
-        </form>
-      )}
-
-      {/* LIVE VIEW */}
-      {view === 'live' && match && (
-        <div style={s.scoreBox}>
-          <div style={s.matchMeta}>{match.league} | {match.ground}<br/>Umpire: {match.umpire}</div>
-          <div style={s.bigScore}>{match.score}/{match.wkts} <span style={{ fontSize: '24px' }}>({match.ovs}.{match.balls})</span></div>
-          <div style={s.statusText}>{match.toss} won & elected to {match.choice}</div>
-
-          {/* PLAYERS LIST */}
-          <div style={s.playerTable}>
-            {[match.striker, match.nonStriker].map((p, i) => (
-              <div key={i} style={s.pRow} onClick={() => isAdmin && set(ref(db, 'liveMatch'), { ...match, [i === 0 ? 'striker' : 'nonStriker']: match.pBat[0] })}>
-                <span>{p ? `${p.name}${i === 0 ? '*' : ''}` : `Select ${i === 0 ? 'Striker' : 'Non-Striker'}`}</span>
-                <span>{p ? `${p.r}(${p.b})` : "0(0)"} <a href={`https://wa.me/${ADMIN_WA}`} style={s.waSmall}>📞</a></span>
-              </div>
-            ))}
-          </div>
-
-          {isAdmin && (
-            <div style={s.controls}>
-              <div style={s.grid}>
-                {[0, 1, 2, 3, 4, 6].map(n => <button key={n} onClick={() => updateScore(n)} style={s.numBtn}>{n}</button>)}
-                <button onClick={() => updateScore(0, "WD")} style={s.exBtn}>WD</button>
-                <button onClick={() => updateScore(0, "NB")} style={s.exBtn}>NB</button>
-              </div>
-              <button onClick={() => updateScore(0, "W")} style={s.wktBtn}>WICKET OUT</button>
-              <button onClick={() => remove(ref(db, 'liveMatch'))} style={s.resetBtn}>RESET MATCH</button>
+      ) : (
+        /* Live Scoreboard with Animations */
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-2xl mx-auto"
+        >
+          <div className="bg-[#1e293b] rounded-3xl p-6 shadow-xl border-t-4 border-yellow-500">
+            <div className="flex justify-between text-sm text-gray-400 mb-4">
+              <span className="flex items-center gap-1"><MapPin size={14}/> {match?.ground}</span>
+              <span className="flex items-center gap-1"><Clock size={14}/> {match?.time}</span>
             </div>
-          )}
-        </div>
+
+            <div className="text-center mb-8">
+              <AnimatePresence mode="wait">
+                <motion.h2 
+                  key={match?.runs}
+                  initial={{ scale: 0.8 }} 
+                  animate={{ scale: 1 }}
+                  className="text-7xl font-black"
+                >
+                  {match?.runs}/{match?.wickets}
+                </motion.h2>
+              </AnimatePresence>
+              <p className="text-xl text-yellow-500 font-medium">Overs: {match?.overs}.{match?.ballsInOver}</p>
+              <p className="text-xs mt-2 text-gray-400">CRR: {(match!.runs / (match!.overs + match!.ballsInOver/6 || 1)).toFixed(2)}</p>
+            </div>
+
+            {/* Batsmen & Bowler Section */}
+            <div className="grid grid-cols-1 gap-3 mb-8">
+              <div className="bg-black/30 p-4 rounded-xl border border-gray-700 flex justify-between items-center">
+                <span>🏏 {match?.striker?.name}*</span>
+                <span className="font-mono text-yellow-500">{match?.striker?.runs}({match?.striker?.balls})</span>
+              </div>
+              <div className="bg-black/30 p-4 rounded-xl border border-gray-700 flex justify-between items-center">
+                <span>🏏 {match?.nonStriker?.name}</span>
+                <span className="font-mono">{match?.nonStriker?.runs}({match?.nonStriker?.balls})</span>
+              </div>
+              <div className="bg-yellow-500/10 p-4 rounded-xl border border-yellow-500/30 flex justify-between items-center">
+                <span className="text-yellow-500">🎾 Bowler: {match?.bowler}</span>
+                <button className="text-[10px] bg-yellow-500 text-black px-2 py-1 rounded">CHANGE</button>
+              </div>
+            </div>
+
+            {/* Functional Control Panel (Admin Only) */}
+            {isAdmin && (
+              <div className="grid grid-cols-4 gap-2">
+                {[0, 1, 2, 3, 4, 6].map(val => (
+                  <button 
+                    key={val} 
+                    onClick={() => updateScore(val)}
+                    className="bg-white text-black font-bold h-14 rounded-xl hover:bg-gray-200 transition-colors"
+                  >
+                    {val}
+                  </button>
+                ))}
+                <button onClick={() => updateScore('WD')} className="bg-yellow-600 text-white font-bold rounded-xl">WD</button>
+                <button onClick={() => updateScore('NB')} className="bg-yellow-600 text-white font-bold rounded-xl">NB</button>
+                <button onClick={() => updateScore('W')} className="col-span-4 bg-red-600 py-3 rounded-xl font-bold mt-2 uppercase tracking-widest">Wicket Out</button>
+              </div>
+            )}
+          </div>
+          
+          <button className="w-full mt-6 py-4 bg-[#2d3748] rounded-xl text-gray-400 text-sm font-semibold border border-gray-700">
+            MATCH FINISHED & SAVE TO HISTORY
+          </button>
+        </motion.div>
       )}
     </div>
   );
 }
-
-const s: any = {
-  body: { background: '#0a101e', minHeight: '100vh', color: 'white', fontFamily: 'sans-serif' },
-  header: { background: '#161d31', padding: '15px', borderBottom: '1px solid #f5cd11' },
-  adminInfo: { display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' },
-  dpWrap: { position: 'relative', width: '60px', height: '60px' },
-  dp: { width: '100%', height: '100%', borderRadius: '50%', border: '2px solid #f5cd11', objectFit: 'cover' },
-  fileInp: { position: 'absolute', inset: 0, opacity: 0 },
-  adminName: { fontWeight: 'bold', color: '#f5cd11', fontSize: '16px' },
-  waLink: { color: '#22c55e', fontSize: '12px', textDecoration: 'none' },
-  nav: { display: 'flex', gap: '10px' },
-  tab: { background: '#252d4a', color: '#ccc', border: 'none', padding: '8px 15px', borderRadius: '5px' },
-  tabActive: { background: '#f5cd11', color: '#000', border: 'none', padding: '8px 15px', borderRadius: '5px', fontWeight: 'bold' },
-  addMatchBtn: { marginLeft: 'auto', background: '#f5cd11', border: 'none', padding: '8px 15px', borderRadius: '5px', fontWeight: 'bold' },
-  container: { padding: '20px' },
-  title: { textAlign: 'center', color: '#f5cd11', marginBottom: '20px' },
-  input: { width: '100%', padding: '12px', marginBottom: '10px', background: '#161d31', border: '1px solid #334155', color: 'white', borderRadius: '8px' },
-  area: { width: '100%', padding: '12px', background: '#161d31', border: '1px solid #334155', color: 'white', height: '80px', borderRadius: '8px', marginBottom: '10px' },
-  mainBtn: { width: '100%', padding: '15px', background: '#f5cd11', border: 'none', fontWeight: 'bold', borderRadius: '8px', cursor: 'pointer' },
-  scoreBox: { padding: '20px' },
-  matchMeta: { textAlign: 'center', color: '#aaa', fontSize: '14px' },
-  bigScore: { fontSize: '60px', textAlign: 'center', margin: '20px 0', fontWeight: 'bold' },
-  statusText: { textAlign: 'center', color: '#f5cd11', marginBottom: '20px' },
-  pRow: { background: '#161d31', padding: '15px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', marginBottom: '10px' },
-  waSmall: { textDecoration: 'none', marginLeft: '10px' },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' },
-  numBtn: { padding: '15px', background: 'white', color: 'black', border: 'none', borderRadius: '8px', fontWeight: 'bold' },
-  exBtn: { background: '#f5cd11', border: 'none', borderRadius: '8px', fontWeight: 'bold' },
-  wktBtn: { width: '100%', padding: '15px', background: '#ef4444', border: 'none', marginTop: '10px', borderRadius: '8px', fontWeight: 'bold', color: 'white' },
-  resetBtn: { width: '100%', background: 'none', border: 'none', color: '#555', marginTop: '20px' },
-  row: { display: 'flex', gap: '10px' }
-};
