@@ -18,30 +18,22 @@ const db = getDatabase(app);
 export default function App() {
   const [match, setMatch] = useState({
     score: 0, wickets: 0, balls: 0, overs: 0,
+    teamA: { name: "Team A", logo: "", players: [] },
+    teamB: { name: "Team B", logo: "", players: [] },
     striker: "Batsman 1", nonStriker: "Batsman 2", bowler: "Bowler 1",
-    adminName: "Touqeer Iqbal", 
-    adminPic: "", 
-    whatsapp: "923015800630" // Aap ka number add ho gaya hai
+    umpire: "Umpire Name",
+    adminName: "Touqeer Iqbal",
+    adminPic: "",
+    whatsapp: "923015800630"
   });
 
   const [anim, setAnim] = useState("");
 
   useEffect(() => {
-    onValue(ref(db, 'match'), (snap) => {
-      if (snap.val()) setMatch(snap.val());
-    });
+    onValue(ref(db, 'match'), (snap) => snap.val() && setMatch(snap.val()));
   }, []);
 
-  const updateDB = (newData: any) => set(ref(db, 'match'), newData);
-
-  const handlePicUpload = (e: any) => {
-    const file = e.target.files[0];
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      updateDB({ ...match, adminPic: reader.result });
-    };
-    if (file) reader.readAsDataURL(file);
-  };
+  const updateDB = (data: any) => set(ref(db, 'match'), data);
 
   const handleBall = (runs: number, type: string) => {
     let m = { ...match };
@@ -52,67 +44,79 @@ export default function App() {
       if (runs === 6) setAnim("🚀 SIXER!");
     } else if (type === 'wkt') {
       m.wickets += 1; m.balls += 1; setAnim("☝️ OUT!");
-      m.striker = prompt("Naya Batsman likhen:") || "New Player";
+      m.striker = prompt("Naya Batsman:") || "New Player";
     } else if (type === 'wd' || type === 'nb') {
-      m.score += 1; setAnim(type === 'wd' ? "WIDE" : "NO BALL");
+      m.score += 1;
     }
 
     if (m.balls >= 6) {
       m.overs += 1; m.balls = 0;
-      const nextBowler = prompt("Over khatam! Aglay Bowler ka naam:");
-      m.bowler = nextBowler || "New Bowler";
+      m.bowler = prompt("Agla Bowler:") || "New Bowler";
       [m.striker, m.nonStriker] = [m.nonStriker, m.striker];
     }
     updateDB(m);
-    setTimeout(() => setAnim(""), 2500);
+    setTimeout(() => setAnim(""), 2000);
+  };
+
+  const setupTeams = () => {
+    let m = { ...match };
+    m.teamA.name = prompt("Team A Name:") || m.teamA.name;
+    m.teamB.name = prompt("Team B Name:") || m.teamB.name;
+    m.umpire = prompt("Empire Name:") || m.umpire;
+    updateDB(m);
   };
 
   return (
-    <div style={{ background: '#f0f2f5', minHeight: '100vh', fontFamily: 'sans-serif' }}>
-      {/* Header with Touqeer Bhai's Profile */}
-      <div style={{ background: '#1a1d23', color: '#f5cd11', padding: '10px 15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div style={{ background: '#0f172a', minHeight: '100vh', fontFamily: 'sans-serif', color: 'white' }}>
+      {/* Premium Header */}
+      <div style={{ background: '#1e293b', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '3px solid #f5cd11' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <label style={{ cursor: 'pointer', position: 'relative' }}>
-            <input type="file" onChange={handlePicUpload} style={{ display: 'none' }} />
-            <div style={{ width: '45px', height: '45px', borderRadius: '50%', background: '#333', overflow: 'hidden', border: '2px solid #f5cd11', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {match.adminPic ? <img src={match.adminPic} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '8px', color: 'white' }}>PIC</span>}
-            </div>
-          </label>
-          <div style={{ lineHeight: '1.2' }}>
-            <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{match.adminName}</div>
-            <div style={{ fontSize: '10px', color: '#ccc' }}>Admin Dashboard</div>
+          <img src={match.adminPic || "https://via.placeholder.com/40"} style={{ width: '45px', height: '45px', borderRadius: '50%', border: '2px solid #f5cd11' }} />
+          <div>
+            <div style={{ fontSize: '12px', color: '#cbd5e1' }}>{match.adminName}</div>
+            <div style={{ fontSize: '18px', fontWeight: '900', color: '#f5cd11', letterSpacing: '1px' }}>ADHI KOT CRICKET PRO</div>
           </div>
         </div>
-        <a href={`https://wa.me/${match.whatsapp}`} target="_blank" rel="noreferrer" style={{ background: '#25D366', color: 'white', padding: '6px 12px', borderRadius: '20px', fontSize: '12px', textDecoration: 'none', fontWeight: 'bold' }}>
-          WhatsApp 💬
-        </a>
+        <a href={`https://wa.me/${match.whatsapp}`} target="_blank" style={{ background: '#25D366', padding: '8px 12px', borderRadius: '20px', fontSize: '12px', color: 'white', textDecoration: 'none', fontWeight: 'bold' }}>WhatsApp 💬</a>
       </div>
 
-      {anim && <div style={{ position: 'fixed', top: '40%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '50px', fontWeight: 'bold', color: '#1a1d23', zIndex: 100, textShadow: '2px 2px #f5cd11', textAlign: 'center', width: '100%' }}>{anim}</div>}
+      {anim && <div style={{ position: 'fixed', top: '40%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '60px', fontWeight: '900', color: '#f5cd11', zIndex: 100, textShadow: '4px 4px #000' }}>{anim}</div>}
 
       <div style={{ padding: '15px' }}>
-        <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
-          <div style={{ fontSize: '45px', fontWeight: 'bold', color: '#222' }}>{match.score}/{match.wickets} <span style={{ fontSize: '20px', color: '#666', fontWeight: 'normal' }}>({match.overs}.{match.balls})</span></div>
-          <div style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '15px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+        {/* Scoreboard Card */}
+        <div style={{ background: 'linear-gradient(135deg, #334155 0%, #1e293b 100%)', borderRadius: '15px', padding: '20px', boxShadow: '0 10px 20px rgba(0,0,0,0.3)', border: '1px solid #475569' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '14px', color: '#f5cd11', fontWeight: 'bold' }}>
+            <span>{match.teamA.name} vs {match.teamB.name}</span>
+            <span>Umpire: {match.umpire}</span>
+          </div>
+          <div style={{ fontSize: '55px', fontWeight: 'bold' }}>{match.score}/{match.wickets} <span style={{ fontSize: '20px', color: '#94a3b8' }}>({match.overs}.{match.balls})</span></div>
+          
+          <div style={{ marginTop: '20px', background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>🏏 <strong>{match.striker}*</strong></span>
-              <span style={{ color: '#007bff', fontWeight: 'bold' }}>🎾 {match.bowler}</span>
+              <span style={{ color: '#60a5fa' }}>⚪ {match.bowler}</span>
             </div>
-            <div style={{ color: '#666' }}>🏏 {match.nonStriker}</div>
+            <div style={{ color: '#94a3b8', marginTop: '5px' }}>🏏 {match.nonStriker}</div>
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginTop: '20px' }}>
+        {/* Buttons */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginTop: '25px' }}>
           {[0, 1, 2, 3, 4, 6].map(r => <button key={r} onClick={() => handleBall(r, 'run')} style={btnStyle}>{r}</button>)}
-          <button onClick={() => handleBall(0, 'wkt')} style={{ ...btnStyle, background: '#d32f2f', color: 'white' }}>WKT</button>
-          <button onClick={() => handleBall(0, 'wd')} style={{ ...btnStyle, background: '#ffb300' }}>WD</button>
-          <button onClick={() => handleBall(0, 'nb')} style={{ ...btnStyle, background: '#ffb300' }}>NB</button>
+          <button onClick={() => handleBall(0, 'wkt')} style={{ ...btnStyle, background: '#ef4444' }}>WKT</button>
+          <button onClick={() => handleBall(0, 'wd')} style={{ ...btnStyle, background: '#eab308' }}>WD</button>
+          <button onClick={() => handleBall(0, 'nb')} style={{ ...btnStyle, background: '#eab308' }}>NB</button>
         </div>
 
-        <button onClick={() => { if(window.confirm("Match Reset Karen?")) updateDB({ ...match, score: 0, wickets: 0, balls: 0, overs: 0 })}} style={{ width: '100%', marginTop: '30px', padding: '12px', borderRadius: '8px', border: 'none', background: '#444', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>Reset Match</button>
+        {/* Settings Buttons */}
+        <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
+          <button onClick={setupTeams} style={utilBtn}>Teams Setup</button>
+          <button onClick={() => updateDB({ ...match, score: 0, wickets: 0, balls: 0, overs: 0 })} style={{ ...utilBtn, background: '#475569' }}>Reset Match</button>
+        </div>
       </div>
     </div>
   );
 }
 
-const btnStyle = { padding: '22px 5px', fontSize: '20px', fontWeight: 'bold', border: 'none', borderRadius: '10px', background: 'white', boxShadow: '0 3px 6px rgba(0,0,0,0.1)', cursor: 'pointer' };
+const btnStyle: any = { padding: '20px 5px', fontSize: '22px', fontWeight: 'bold', border: 'none', borderRadius: '12px', background: 'white', color: '#1e293b', cursor: 'pointer', boxShadow: '0 4px #cbd5e1' };
+const utilBtn: any = { flex: 1, padding: '12px', borderRadius: '8px', border: 'none', background: '#f5cd11', color: '#0f172a', fontWeight: 'bold', cursor: 'pointer' };
