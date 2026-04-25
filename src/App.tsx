@@ -1,192 +1,198 @@
 import React, { useState, useEffect } from 'react';
-import { db } from './firebase'; // Ensure your firebase config is here
-import { ref, set, onValue, update } from 'firebase/database';
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, set, onValue, update } from "firebase/database";
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageCircle, Trophy, User, MapPin, Clock, Lock } from 'lucide-react';
+import { MessageCircle, Phone, Trophy, MapPin, Calendar, Clock, Lock, UserCheck } from 'lucide-react';
 
-// --- Types ---
-interface Player {
-  name: string;
-  whatsapp: string;
-  runs: number;
-  balls: number;
-  fours: number;
-  sixes: number;
-}
+// Firebase Configuration (Aapki DB URL ke mutabiq)
+const firebaseConfig = {
+  apiKey: "AIzaSyB0e37uvyY7Jpuj-FYxDlX52hjb0uwsBfg",
+  databaseURL: "https://adhikot-cricket-pro-default-rtdb.firebaseio.com"
+};
 
-interface MatchState {
-  league: string;
-  ground: string;
-  date: string;
-  time: string;
-  battingTeam: string;
-  bowlingTeam: string;
-  tossWinner: string;
-  decision: 'Bat' | 'Bowl';
-  runs: number;
-  wickets: number;
-  overs: number;
-  ballsInOver: number;
-  target?: number;
-  striker: Player | null;
-  nonStriker: Player | null;
-  bowler: string;
-  isLive: boolean;
-}
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
-const ADMIN_PASSWORD = "6545";
+const ADMIN_WA = "923015800630"; // Admin WhatsApp
+const ADMIN_PASS = "6545";
 
-export default function AdhiKotCricketPro() {
+export default function IntelligentCricketPro() {
+  const [match, setMatch] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [view, setView] = useState<'live' | 'setup' | 'login'>('live');
   const [passInput, setPassInput] = useState("");
-  const [match, setMatch] = useState<MatchState | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  // 1. Real-time Firebase Sync
   useEffect(() => {
-    const matchRef = ref(db, 'liveMatch');
-    return onValue(matchRef, (snapshot) => {
-      setMatch(snapshot.val());
-      setLoading(false);
-    });
+    onValue(ref(db, 'liveMatch'), (snap) => setMatch(snap.val()));
   }, []);
 
-  // 2. Admin Authentication
-  const handleLogin = () => {
-    if (passInput === ADMIN_PASSWORD) setIsAdmin(true);
-    else alert("Wrong Password!");
-  };
-
-  // 3. Scoring Logic (Functional Buttons)
-  const updateScore = (value: number | 'WD' | 'NB' | 'W') => {
-    if (!match || !isAdmin) return;
+  const handleScore = (runs: number, extra: string = "") => {
+    if (!match || !isAdmin || !match.striker) return;
     
-    let newRuns = match.runs;
-    let newBalls = match.ballsInOver;
-    let newOvers = match.overs;
-    let newWickets = match.wickets;
+    let m = { ...match };
+    const sIdx = m.pBat.findIndex((p: any) => p.name === m.striker.name);
 
-    if (typeof value === 'number') {
-      newRuns += value;
-      newBalls += 1;
-      // Update striker stats here...
-    } else if (value === 'WD' || value === 'NB') {
-      newRuns += 1;
-    } else if (value === 'W') {
-      newWickets += 1;
-      newBalls += 1;
+    if (extra === "W") {
+      m.wkts += 1;
+      m.balls += 1;
+      m.pBat[sIdx].b += 1;
+      m.striker = null; 
+    } else if (extra === "WD" || extra === "NB") {
+      m.score += (runs + 1);
+    } else {
+      m.score += runs;
+      m.balls += 1;
+      m.pBat[sIdx].r += runs;
+      m.pBat[sIdx].b += 1;
+      if (runs === 4) m.pBat[sIdx].f4 += 1;
+      if (runs === 6) m.pBat[sIdx].s6 += 1;
+      
+      if (runs % 2 !== 0) {
+        const temp = m.striker;
+        m.striker = m.nonStriker;
+        m.nonStriker = temp;
+      }
     }
 
-    if (newBalls === 6) {
-      newOvers += 1;
-      newBalls = 0;
+    if (m.balls === 6) {
+      m.ovs += 1;
+      m.balls = 0;
+      const temp = m.striker;
+      m.striker = m.nonStriker;
+      m.nonStriker = temp;
     }
 
-    update(ref(db, 'liveMatch'), {
-      runs: newRuns,
-      ballsInOver: newBalls,
-      overs: newOvers,
-      wickets: newWickets
-    });
+    update(ref(db, 'liveMatch'), m);
   };
-
-  if (loading) return <div className="text-white p-10">Loading System...</div>;
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white font-sans p-4">
-      {/* Header with Admin Info */}
-      <header className="flex justify-between items-center border-b border-yellow-500/30 pb-4 mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-yellow-500">ADHI KOT PRO</h1>
-          <p className="text-xs text-gray-400">Admin: Touqeer Iqbal Baghoor</p>
+    <div className="min-h-screen bg-[#0a101e] text-white font-sans overflow-x-hidden">
+      {/* --- HEADER (As per SS) --- */}
+      <header className="bg-[#161d31] p-4 border-b border-yellow-500/50 flex justify-between items-center sticky top-0 z-50">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full border-2 border-yellow-500 overflow-hidden">
+            <img src="https://via.placeholder.com/150" alt="Admin" className="object-cover" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-yellow-500 uppercase">Touqeer Iqbal Baghoor</h2>
+            <a href={`https://wa.me/${ADMIN_WA}`} className="text-[10px] text-green-400 flex items-center gap-1">
+              <MessageCircle size={10} /> WhatsApp Admin
+            </a>
+          </div>
         </div>
-        <a href="https://wa.me/923000000000" className="bg-green-600 p-2 rounded-full">
-          <MessageCircle size={20} />
-        </a>
+        <div className="flex gap-2">
+           <button onClick={() => setView('live')} className={`px-4 py-1 rounded-md text-xs font-bold ${view === 'live' ? 'bg-yellow-500 text-black' : 'bg-gray-800'}`}>Live</button>
+           <button onClick={() => isAdmin ? setView('setup') : setView('login')} className="bg-yellow-500 text-black px-4 py-1 rounded-md text-xs font-bold">+ Match</button>
+        </div>
       </header>
 
-      {!isAdmin && !match?.isLive ? (
-        /* Admin Login Section */
-        <div className="max-w-md mx-auto bg-[#1e293b] p-8 rounded-2xl shadow-2xl border border-gray-700">
-          <Lock className="mx-auto mb-4 text-yellow-500" />
-          <h2 className="text-center mb-6">Enter Admin Password</h2>
-          <input 
-            type="password" 
-            className="w-full p-3 bg-black rounded-lg mb-4 text-center border border-gray-600 focus:border-yellow-500 outline-none"
-            onChange={(e) => setPassInput(e.target.value)}
-          />
-          <button onClick={handleLogin} className="w-full bg-yellow-500 text-black font-bold py-3 rounded-lg hover:bg-yellow-400">
-            ACCESS SYSTEM
-          </button>
-        </div>
-      ) : (
-        /* Live Scoreboard with Animations */
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="max-w-2xl mx-auto"
-        >
-          <div className="bg-[#1e293b] rounded-3xl p-6 shadow-xl border-t-4 border-yellow-500">
-            <div className="flex justify-between text-sm text-gray-400 mb-4">
-              <span className="flex items-center gap-1"><MapPin size={14}/> {match?.ground}</span>
-              <span className="flex items-center gap-1"><Clock size={14}/> {match?.time}</span>
+      {/* --- MAIN CONTENT --- */}
+      <main className="p-4 max-w-lg mx-auto">
+        
+        {view === 'login' && (
+          <div className="bg-[#161d31] p-6 rounded-2xl border border-gray-700 text-center">
+            <Lock className="mx-auto mb-4 text-yellow-500" />
+            <h3 className="mb-4">Admin Verification</h3>
+            <input 
+              type="password" 
+              placeholder="Enter 6545" 
+              className="w-full bg-black border border-gray-600 p-3 rounded-lg mb-4 text-center"
+              onChange={(e) => setPassInput(e.target.value)}
+            />
+            <button 
+              onClick={() => passInput === ADMIN_PASS ? (setIsAdmin(true), setView('setup')) : alert("Ghalat Password!")}
+              className="w-full bg-yellow-500 text-black py-3 rounded-xl font-bold"
+            >LOGIN</button>
+          </div>
+        )}
+
+        {view === 'live' && match && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            {/* Score Display Card */}
+            <div className="bg-[#161d31] rounded-3xl p-6 shadow-2xl border-t-4 border-yellow-500 relative overflow-hidden mb-6">
+              <div className="flex justify-between text-[10px] text-gray-400 mb-4 uppercase tracking-widest">
+                <span className="flex items-center gap-1"><MapPin size={10}/> {match.ground}</span>
+                <span className="flex items-center gap-1"><Calendar size={10}/> {match.date}</span>
+                <span className="flex items-center gap-1"><Clock size={10}/> {match.time}</span>
+              </div>
+              
+              <div className="text-center">
+                <p className="text-gray-400 text-xs mb-1 uppercase italic font-semibold">{match.league}</p>
+                <div className="flex justify-center items-baseline gap-2">
+                  <motion.h1 key={match.score} initial={{ scale: 1.2 }} animate={{ scale: 1 }} className="text-6xl font-black">
+                    {match.score}/{match.wkts}
+                  </motion.h1>
+                  <span className="text-xl text-yellow-500">({match.ovs}.{match.balls})</span>
+                </div>
+                <div className="mt-2 text-xs text-yellow-500 font-bold bg-yellow-500/10 py-1 px-4 rounded-full inline-block">
+                  {match.tossWinner} won & elected to {match.choice}
+                </div>
+              </div>
+
+              {match.target && (
+                <div className="mt-4 bg-black/40 p-2 rounded-xl text-center text-sm border border-yellow-500/20">
+                  Target: <span className="text-yellow-500 font-bold">{match.target}</span> | 
+                  Needs <span className="text-white font-bold">{match.target - match.score}</span> in <span className="text-white font-bold">{(match.totalOvers * 6) - (match.ovs * 6 + match.balls)}</span> balls
+                </div>
+              )}
             </div>
 
-            <div className="text-center mb-8">
-              <AnimatePresence mode="wait">
-                <motion.h2 
-                  key={match?.runs}
-                  initial={{ scale: 0.8 }} 
-                  animate={{ scale: 1 }}
-                  className="text-7xl font-black"
-                >
-                  {match?.runs}/{match?.wickets}
-                </motion.h2>
-              </AnimatePresence>
-              <p className="text-xl text-yellow-500 font-medium">Overs: {match?.overs}.{match?.ballsInOver}</p>
-              <p className="text-xs mt-2 text-gray-400">CRR: {(match!.runs / (match!.overs + match!.ballsInOver/6 || 1)).toFixed(2)}</p>
+            {/* Players Table */}
+            <div className="bg-[#161d31] rounded-2xl overflow-hidden mb-6 border border-gray-800">
+              <table className="w-full text-xs">
+                <thead className="bg-black/50 text-gray-400 uppercase">
+                  <tr>
+                    <th className="p-3 text-left">Batsman</th>
+                    <th className="p-3">R</th>
+                    <th className="p-3">B</th>
+                    <th className="p-3">4s</th>
+                    <th className="p-3">6s</th>
+                    <th className="p-3">WA</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[match.striker, match.nonStriker].map((p, i) => (
+                    <tr key={i} className={`border-b border-gray-800 ${i === 0 ? 'bg-yellow-500/5' : ''}`}>
+                      <td className="p-3 font-bold">{p?.name || '---'}{i === 0 ? '*' : ''}</td>
+                      <td className="p-3 text-center text-yellow-500 font-mono">{p?.r || 0}</td>
+                      <td className="p-3 text-center text-gray-400 font-mono">{p?.b || 0}</td>
+                      <td className="p-3 text-center">{p?.f4 || 0}</td>
+                      <td className="p-3 text-center">{p?.s6 || 0}</td>
+                      <td className="p-3 text-center">
+                        <a href={`https://wa.me/${p?.wa || ADMIN_WA}`} className="text-green-500"><Phone size={14}/></a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="p-3 bg-black/20 text-[10px] flex justify-between items-center">
+                <span className="text-gray-500">Bowler: <b className="text-white">{match.bowler || 'Select'}</b></span>
+                <span className="text-yellow-500 font-bold uppercase tracking-tighter">Umpire: {match.umpire}</span>
+              </div>
             </div>
 
-            {/* Batsmen & Bowler Section */}
-            <div className="grid grid-cols-1 gap-3 mb-8">
-              <div className="bg-black/30 p-4 rounded-xl border border-gray-700 flex justify-between items-center">
-                <span>🏏 {match?.striker?.name}*</span>
-                <span className="font-mono text-yellow-500">{match?.striker?.runs}({match?.striker?.balls})</span>
-              </div>
-              <div className="bg-black/30 p-4 rounded-xl border border-gray-700 flex justify-between items-center">
-                <span>🏏 {match?.nonStriker?.name}</span>
-                <span className="font-mono">{match?.nonStriker?.runs}({match?.nonStriker?.balls})</span>
-              </div>
-              <div className="bg-yellow-500/10 p-4 rounded-xl border border-yellow-500/30 flex justify-between items-center">
-                <span className="text-yellow-500">🎾 Bowler: {match?.bowler}</span>
-                <button className="text-[10px] bg-yellow-500 text-black px-2 py-1 rounded">CHANGE</button>
-              </div>
-            </div>
-
-            {/* Functional Control Panel (Admin Only) */}
+            {/* Control Panel (Admin Only) */}
             {isAdmin && (
-              <div className="grid grid-cols-4 gap-2">
-                {[0, 1, 2, 3, 4, 6].map(val => (
-                  <button 
-                    key={val} 
-                    onClick={() => updateScore(val)}
-                    className="bg-white text-black font-bold h-14 rounded-xl hover:bg-gray-200 transition-colors"
-                  >
-                    {val}
+              <div className="grid grid-cols-4 gap-2 animate-in fade-in slide-in-from-bottom-4">
+                {[0, 1, 2, 3, 4, 6].map(num => (
+                  <button key={num} onClick={() => handleScore(num)} className="h-14 bg-white text-black rounded-xl font-black text-xl shadow-lg active:scale-95 transition-transform">
+                    {num}
                   </button>
                 ))}
-                <button onClick={() => updateScore('WD')} className="bg-yellow-600 text-white font-bold rounded-xl">WD</button>
-                <button onClick={() => updateScore('NB')} className="bg-yellow-600 text-white font-bold rounded-xl">NB</button>
-                <button onClick={() => updateScore('W')} className="col-span-4 bg-red-600 py-3 rounded-xl font-bold mt-2 uppercase tracking-widest">Wicket Out</button>
+                <button onClick={() => handleScore(0, "WD")} className="h-14 bg-yellow-500 text-black rounded-xl font-bold">WD</button>
+                <button onClick={() => handleScore(0, "NB")} className="h-14 bg-yellow-500 text-black rounded-xl font-bold">NB</button>
+                <button onClick={() => handleScore(0, "W")} className="col-span-4 h-14 bg-red-600 rounded-xl font-bold uppercase tracking-widest text-white shadow-lg active:bg-red-700">WICKET OUT</button>
               </div>
             )}
-          </div>
-          
-          <button className="w-full mt-6 py-4 bg-[#2d3748] rounded-xl text-gray-400 text-sm font-semibold border border-gray-700">
-            MATCH FINISHED & SAVE TO HISTORY
-          </button>
-        </motion.div>
-      )}
+          </motion.div>
+        )}
+      </main>
+
+      {/* --- LIVE INDICATOR --- */}
+      <div className="fixed bottom-4 left-4 flex items-center gap-2">
+        <span className="w-2 h-2 bg-red-600 rounded-full animate-ping"></span>
+        <span className="text-[10px] font-bold uppercase text-red-500 tracking-widest">Live System Active</span>
+      </div>
     </div>
   );
 }
