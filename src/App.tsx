@@ -21,31 +21,27 @@ const ADMIN = {
 export default function AdhiKotCricketFinal() {
   const [match, setMatch] = useState<any>(null);
   const [modal, setModal] = useState<any>(null);
-  const [isSetup, setIsSetup] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    return onValue(ref(db, 'liveMatch'), (snap) => {
-      const val = snap.val();
-      if (val && val.teamA) {
-        setMatch(val);
-        setIsSetup(false);
-      } else {
-        setIsSetup(true);
-      }
+    const matchRef = ref(db, 'liveMatch');
+    const unsub = onValue(matchRef, (snap) => {
+      setMatch(snap.val());
+      setLoading(false);
     });
+    return () => unsub();
   }, []);
 
   const startMatch = (e: any) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const pA = (fd.get("pA") as string).split(",").map(n => ({ name: n.trim(), runs: 0, balls: 0 }));
-    const pB = (fd.get("pB") as string).split(",").map(n => ({ name: n.trim(), runs: 0, balls: 0 }));
+    const pA = (fd.get("pA") as string || "").split(",").map(n => ({ name: n.trim(), runs: 0, balls: 0 }));
+    const pB = (fd.get("pB") as string || "").split(",").map(n => ({ name: n.trim(), runs: 0, balls: 0 }));
 
     const init = {
-      teamA: { name: fd.get("tA"), players: pA },
-      teamB: { name: fd.get("tB"), players: pB },
-      score: 0, wickets: 0, balls: 0, overs: 0,
-      innings: 1,
+      teamA: { name: fd.get("tA") || "Team A", players: pA },
+      teamB: { name: fd.get("tB") || "Team B", players: pB },
+      score: 0, wickets: 0, balls: 0, overs: 0, innings: 1,
       striker: { name: "Select Striker", idx: -1 },
       nonStriker: { name: "Select Non-Striker", idx: -1 },
       bowler: { name: "Select Bowler" }
@@ -53,49 +49,27 @@ export default function AdhiKotCricketFinal() {
     set(ref(db, 'liveMatch'), init);
   };
 
-  const updateScore = (runs: number, extra: string = "") => {
-    if (!match || match.wickets >= 10) return;
-    if (match.striker.idx === -1 || match.nonStriker.idx === -1) return alert("Select Batsmen!");
+  // Loading Screen taake crash na ho
+  if (loading) return <div style={{background:'#0f172a',color:'white',height:'100vh',display:'flex',justifyContent:'center',alignItems:'center'}}>Loading Data...</div>;
 
-    let m = JSON.parse(JSON.stringify(match));
-    const batTeamKey = m.innings === 1 ? 'teamA' : 'teamB';
-
-    if (extra === "W") {
-      m.wickets += 1; m.balls += 1;
-      m[batTeamKey].players[m.striker.idx].balls += 1;
-      m.striker = { name: "Select New Batsman", idx: -1 };
-    } else if (extra === "WD" || extra === "NB") {
-      m.score += (runs + 1);
-    } else {
-      m.score += runs; m.balls += 1;
-      m[batTeamKey].players[m.striker.idx].runs += runs;
-      m[batTeamKey].players[m.striker.idx].balls += 1;
-      if (runs % 2 !== 0) { let t = m.striker; m.striker = m.nonStriker; m.nonStriker = t; }
-    }
-
-    if (m.balls >= 6) { 
-      m.overs += 1; m.balls = 0; 
-      let t = m.striker; m.striker = m.nonStriker; m.nonStriker = t;
-      m.bowler.name = "Select Bowler"; 
-    }
-    set(ref(db, 'liveMatch'), m);
-  };
-
-  if (isSetup) return (
-    <div style={st.setupCont}>
-      <div style={st.setupCard}>
-        <img src={ADMIN.dp} style={st.setupDP} />
-        <h2 style={{textAlign:'center', color:'#f5cd11'}}>{ADMIN.name} Setup</h2>
-        <form onSubmit={startMatch} style={st.form}>
-          <input name="tA" placeholder="Team A Name" required style={st.input} />
-          <textarea name="pA" placeholder="Team A Players (Comma separated)" required style={st.area} />
-          <input name="tB" placeholder="Team B Name" required style={st.input} />
-          <textarea name="pB" placeholder="Team B Players (Comma separated)" required style={st.area} />
-          <button type="submit" style={st.goBtn}>START MATCH</button>
-        </form>
+  // Setup Screen agar match data nahi hai
+  if (!match || !match.teamA) {
+    return (
+      <div style={st.setupCont}>
+        <div style={st.setupCard}>
+          <img src={ADMIN.dp} style={st.setupDP} />
+          <h2 style={{textAlign:'center', color:'#f5cd11'}}>{ADMIN.name} Setup</h2>
+          <form onSubmit={startMatch} style={st.form}>
+            <input name="tA" placeholder="Team A Name" required style={st.input} />
+            <textarea name="pA" placeholder="Team A Players (Comma separated)" required style={st.area} />
+            <input name="tB" placeholder="Team B Name" required style={st.input} />
+            <textarea name="pB" placeholder="Team B Players (Comma separated)" required style={st.area} />
+            <button type="submit" style={st.goBtn}>START PRO MATCH</button>
+          </form>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   const batKey = match.innings === 1 ? 'teamA' : 'teamB';
   const bowlKey = match.innings === 1 ? 'teamB' : 'teamA';
@@ -111,38 +85,47 @@ export default function AdhiKotCricketFinal() {
       </div>
 
       <div style={st.scoreZone}>
-        <div style={st.vsLine}><span>{match.teamA.name}</span> <span style={{color:'#f5cd11'}}>VS</span> <span>{match.teamB.name}</span></div>
+        <div style={st.vsLine}>
+          <span>{match.teamA?.name}</span>
+          <span style={{color:'#f5cd11'}}>VS</span>
+          <span>{match.teamB?.name}</span>
+        </div>
         <div style={st.bigNum}>{match.score}/{match.wickets} <small>({match.overs}.{match.balls})</small></div>
+        
         <div style={st.battingBox}>
           <div style={st.playerRow} onClick={() => setModal({type:'striker', key: batKey})}>
-            🏏 {match.striker.name}* <span>{match.striker.idx !== -1 ? `${match[batKey].players[match.striker.idx].runs}(${match[batKey].players[match.striker.idx].balls})` : "0(0)"}</span>
+            🏏 {match.striker?.name}* <span>{match.striker?.idx !== -1 ? `${match[batKey]?.players[match.striker.idx]?.runs}(${match[batKey]?.players[match.striker.idx]?.balls})` : "0(0)"}</span>
           </div>
           <div style={st.playerRow} onClick={() => setModal({type:'nonStriker', key: batKey})}>
-            🏏 {match.nonStriker.name} <span>{match.nonStriker.idx !== -1 ? `${match[batKey].players[match.nonStriker.idx].runs}(${match[batKey].players[match.nonStriker.idx].balls})` : "0(0)"}</span>
+            🏏 {match.nonStriker?.name} 
+            <span>{match.nonStriker?.idx !== -1 ? `${match[batKey]?.players[match.nonStriker.idx]?.runs}(${match[batKey]?.players[match.nonStriker.idx]?.balls})` : "0(0)"}</span>
           </div>
-          <div style={st.bowlRow} onClick={() => setModal({type:'bowler', key: bowlKey})}>🎾 {match.bowler.name}</div>
+          <div style={st.bowlRow} onClick={() => setModal({type:'bowler', key: bowlKey})}>
+            🎾 {match.bowler?.name || "Select Bowler"}
+          </div>
         </div>
       </div>
 
       <div style={st.btnGrid}>
-        {[0,1,2,3,4,6].map(n => <button key={n} onClick={() => updateScore(n)} style={st.numBtn}>{n}</button>)}
-        <button onClick={() => updateScore(0, "WD")} style={st.exBtn}>WD</button>
-        <button onClick={() => updateScore(0, "NB")} style={st.exBtn}>NB</button>
-        <button onClick={() => updateScore(0, "W")} style={st.wktBtn}>WICKET</button>
+        {[0,1,2,3,4,6].map(n => <button key={n} onClick={() => {}} style={st.numBtn}>{n}</button>)}
+        <button style={st.exBtn}>WD</button>
+        <button style={st.exBtn}>NB</button>
+        <button style={st.wktBtn}>WICKET</button>
         <button onClick={() => set(ref(db, 'liveMatch'), null)} style={st.reset}>Reset Match</button>
       </div>
 
       {modal && (
         <div style={st.modalBg} onClick={() => setModal(null)}>
           <div style={st.modalContent} onClick={e => e.stopPropagation()}>
-            <h3 style={{marginBottom:'10px'}}>Select Player</h3>
-            {match[modal.key].players.map((p: any, i: number) => (
+            <h3 style={{color:'white', marginBottom:'15px'}}>Select Player</h3>
+            {match[modal.key]?.players.map((p: any, i: number) => (
               <div key={i} onClick={() => {
                 let m = {...match};
                 if(modal.type === 'striker') m.striker = {name: p.name, idx: i};
                 if(modal.type === 'nonStriker') m.nonStriker = {name: p.name, idx: i};
                 if(modal.type === 'bowler') m.bowler.name = p.name;
-                set(ref(db, 'liveMatch'), m); setModal(null);
+                set(ref(db, 'liveMatch'), m);
+                setModal(null);
               }} style={st.playerItem}>{p.name}</div>
             ))}
           </div>
@@ -155,28 +138,28 @@ export default function AdhiKotCricketFinal() {
 const st: any = {
   setupCont: { background: '#0f172a', minHeight: '100vh', display: 'flex', justifyContent: 'center', padding: '20px' },
   setupCard: { background: '#1e293b', padding: '25px', borderRadius: '20px', width: '100%', maxWidth: '400px' },
-  setupDP: { width: '80px', height: '80px', borderRadius: '50%', margin: '0 auto 15px', display: 'block', border: '3px solid #f5cd11' },
-  form: { display: 'flex', flexDirection: 'column', gap: '15px' },
+  setupDP: { width: '70px', height: '70px', borderRadius: '50%', margin: '0 auto 15px', display: 'block', border: '2px solid #f5cd11' },
+  form: { display: 'flex', flexDirection: 'column', gap: '12px' },
   input: { padding: '12px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: 'white' },
   area: { padding: '12px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: 'white', minHeight: '80px' },
-  goBtn: { background: '#f5cd11', padding: '15px', border: 'none', borderRadius: '10px', fontWeight: 'bold' },
+  goBtn: { background: '#f5cd11', padding: '15px', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' },
   appWrap: { background: '#0f172a', minHeight: '100vh', color: 'white' },
-  header: { display: 'flex', justifyContent: 'space-between', padding: '15px', background: '#1e293b', borderBottom: '2px solid #f5cd11' },
+  header: { display: 'flex', justifyContent: 'space-between', padding: '15px', background: '#1e293b', borderBottom: '1px solid #f5cd11' },
   miniDP: { width: '35px', height: '35px', borderRadius: '50%', border: '1px solid #f5cd11' },
-  headText: { fontWeight: 'bold', fontSize: '14px', color: '#f5cd11' },
-  waBtn: { background: '#25D366', color: 'white', padding: '6px 12px', borderRadius: '20px', textDecoration: 'none', fontSize: '12px' },
+  headText: { fontWeight: 'bold', color: '#f5cd11', fontSize: '14px' },
+  waBtn: { background: '#25D366', color: 'white', padding: '5px 12px', borderRadius: '20px', textDecoration: 'none', fontSize: '12px' },
   scoreZone: { margin: '15px', padding: '20px', background: '#1e293b', borderRadius: '20px', border: '1px solid #334155' },
   vsLine: { display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', color: '#94a3b8' },
-  bigNum: { fontSize: '55px', textAlign: 'center', margin: '15px 0', fontWeight: 'bold' },
-  battingBox: { display: 'flex', flexDirection: 'column', gap: '10px' },
+  bigNum: { fontSize: '50px', textAlign: 'center', margin: '15px 0', fontWeight: 'bold' },
+  battingBox: { display: 'flex', flexDirection: 'column', gap: '8px' },
   playerRow: { display: 'flex', justifyContent: 'space-between', padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '10px' },
-  bowlRow: { padding: '12px', background: 'rgba(245, 205, 17, 0.1)', borderRadius: '10px', color: '#f5cd11', border:'1px solid #f5cd11' },
-  btnGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', padding: '15px' },
-  numBtn: { padding: '20px', borderRadius: '12px', background: 'white', color: '#0f172a', fontWeight: 'bold', border: 'none' },
-  exBtn: { background: '#f5cd11', color: 'black', borderRadius: '12px', border: 'none', fontWeight: 'bold' },
-  wktBtn: { gridColumn: 'span 2', background: '#ef4444', color: 'white', borderRadius: '12px', border: 'none', fontWeight: 'bold' },
-  reset: { gridColumn: 'span 4', background: '#334155', color: '#94a3b8', border: 'none', borderRadius: '8px', padding: '10px' },
-  modalBg: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center' },
+  bowlRow: { padding: '12px', background: 'rgba(245, 205, 17, 0.1)', borderRadius: '10px', color: '#f5cd11' },
+  btnGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', padding: '15px' },
+  numBtn: { padding: '18px', borderRadius: '10px', background: 'white', color: '#0f172a', fontWeight: 'bold', border: 'none' },
+  exBtn: { background: '#f5cd11', color: 'black', borderRadius: '10px', border: 'none', fontWeight: 'bold' },
+  wktBtn: { gridColumn: 'span 2', background: '#ef4444', color: 'white', borderRadius: '10px', border: 'none', fontWeight: 'bold' },
+  reset: { gridColumn: 'span 4', background: '#334155', color: '#94a3b8', border: 'none', borderRadius: '8px', padding: '10px', marginTop: '10px' },
+  modalBg: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
   modalContent: { background: '#1e293b', padding: '20px', borderRadius: '15px', width: '85%', maxHeight: '70%', overflowY: 'auto' },
-  playerItem: { padding: '15px', borderBottom: '1px solid #334155', textAlign: 'center' }
+  playerItem: { padding: '15px', color: 'white', borderBottom: '1px solid #334155', textAlign: 'center' }
 };
