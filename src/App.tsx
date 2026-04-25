@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, set, onValue, update, remove } from "firebase/database";
+import { getDatabase, ref, set, onValue } from "firebase/database";
 
-// Firebase Configuration
 const firebaseConfig = {
   apiKey: "AIzaSyB0e37uvyY7Jpuj-FYxDlX52hjb0uwsBfg",
   authDomain: "adhikot-cricket-pro.firebaseapp.com",
@@ -13,178 +12,158 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-export default function AdhiKotUltimateCricket() {
-  const [match, setMatch] = useState<any>(null);
-  const [view, setView] = useState("setup"); // setup, live, stats
-  const [modal, setModal] = useState<any>(null); // For player selection
-  const [anim, setAnim] = useState("");
+// FIXED ADMIN DATA
+const ADMIN = {
+  name: "Touqeer Iqbal",
+  dp: "https://i.ibb.co/vzYyLz7/touqeer.jpg", // Make sure this link is correct
+  wa: "923015800630"
+};
 
-  // Permanent Admin Data
-  const adminInfo = {
-    name: "Touqeer Iqbal",
-    dp: "https://i.ibb.co/vzYyLz7/touqeer.jpg",
-    whatsapp: "923015800630"
-  };
+export default function AdhiKotCricketFinal() {
+  const [match, setMatch] = useState<any>(null);
+  const [modal, setModal] = useState<{type: string, team: string} | null>(null);
+  const [isSetup, setIsSetup] = useState(true);
 
   useEffect(() => {
     onValue(ref(db, 'liveMatch'), (snap) => {
       if (snap.val()) {
         setMatch(snap.val());
-        setView("live");
+        setIsSetup(false);
       }
     });
   }, []);
 
-  const handleSetup = (e: any) => {
+  const startMatch = (e: any) => {
     e.preventDefault();
     const fd = new FormData(e.target);
+    const tA = fd.get("tA") as string;
+    const tB = fd.get("tB") as string;
     
-    const teamA = {
-      name: fd.get("tA") as string,
-      players: (fd.get("pA") as string).split(",").map(n => ({ name: n.trim(), runs: 0, balls: 0, out: false }))
-    };
-    const teamB = {
-      name: fd.get("tB") as string,
-      players: (fd.get("pB") as string).split(",").map(n => ({ name: n.trim(), runs: 0, balls: 0, out: false }))
-    };
+    const playersA = (fd.get("pA") as string).split(",").map(n => ({ name: n.trim(), runs: 0, balls: 0 }));
+    const playersB = (fd.get("pB") as string).split(",").map(n => ({ name: n.trim(), runs: 0, balls: 0 }));
 
-    const newMatch = {
-      teamA, teamB,
-      umpire: fd.get("umpire"),
-      toss: fd.get("toss"),
-      target: 0,
-      innings: 1,
+    const init = {
+      teamA: { name: tA, players: playersA },
+      teamB: { name: tB, players: playersB },
       score: 0, wickets: 0, balls: 0, overs: 0,
-      striker: { name: teamA.players[0].name, index: 0 },
-      nonStriker: { name: teamA.players[1].name, index: 1 },
-      bowler: { name: "Select Bowler", runs: 0, balls: 0, wkts: 0 },
-      history: []
+      innings: 1,
+      striker: { name: "Select Striker", idx: -1 },
+      nonStriker: { name: "Select Non-Striker", idx: -1 },
+      bowler: { name: "Select Bowler", wkts: 0 },
+      target: null
     };
-
-    set(ref(db, 'liveMatch'), newMatch);
+    set(ref(db, 'liveMatch'), init);
   };
 
-  const updateBall = (runs: number, extra: string = "") => {
+  const updateScore = (runs: number, extra: string = "") => {
+    if (!match || match.wickets >= 10) return alert("Innings Over!");
+    if (match.striker.idx === -1 || match.nonStriker.idx === -1) return alert("Pehlay dono Batsmen select karein!");
+
     let m = { ...match };
+    const batTeam = m.innings === 1 ? 'teamA' : 'teamB';
+
     if (extra === "W") {
       m.wickets += 1;
       m.balls += 1;
-      setAnim("☝️ WICKET!");
-      // Reset striker to be selected manually
-      m.striker.name = "Select New Batsman";
+      m[batTeam].players[m.striker.idx].balls += 1;
+      m.striker = { name: "Select New Batsman", idx: -1 };
     } else if (extra === "WD" || extra === "NB") {
-      m.score += (1 + runs);
-      setAnim(extra);
+      m.score += (runs + 1);
     } else {
       m.score += runs;
       m.balls += 1;
-      if (runs === 4) setAnim("🏏 FOUR!");
-      if (runs === 6) setAnim("🚀 SIX!");
-      
-      // Update individual batsman stats
-      const pIndex = m.striker.index;
-      const currentInnings = m.innings === 1 ? 'teamA' : 'teamB';
-      m[currentInnings].players[pIndex].runs += runs;
-      m[currentInnings].players[pIndex].balls += 1;
-
-      if (runs % 2 !== 0) swapStriker(m);
+      m[batTeam].players[m.striker.idx].runs += runs;
+      m[batTeam].players[m.striker.idx].balls += 1;
+      if (runs % 2 !== 0) swap(m);
     }
 
-    if (m.balls === 6) {
-      m.overs += 1;
-      m.balls = 0;
-      swapStriker(m);
-      m.bowler.name = "Select Bowler"; // Force manual bowler selection every over
-    }
-
+    if (m.balls === 6) { m.overs += 1; m.balls = 0; swap(m); m.bowler.name = "Select Bowler"; }
     set(ref(db, 'liveMatch'), m);
-    setTimeout(() => setAnim(""), 2000);
   };
 
-  const swapStriker = (m: any) => {
-    let temp = m.striker;
+  const swap = (m: any) => {
+    let t = m.striker;
     m.striker = m.nonStriker;
-    m.nonStriker = temp;
+    m.nonStriker = t;
   };
 
-  const selectPlayer = (role: string, player: any, index: number) => {
+  const setPlayer = (p: any, i: number) => {
     let m = { ...match };
-    if (role === 'striker') m.striker = { name: player.name, index };
-    if (role === 'bowler') m.bowler = { ...m.bowler, name: player.name };
+    if (modal?.type === 'striker') m.striker = { name: p.name, idx: i };
+    if (modal?.type === 'nonStriker') m.nonStriker = { name: p.name, idx: i };
+    if (modal?.type === 'bowler') m.bowler.name = p.name;
     set(ref(db, 'liveMatch'), m);
     setModal(null);
   };
 
-  if (view === "setup") {
+  if (isSetup) {
     return (
-      <div style={container}>
-        <div style={card}>
-          <img src={adminInfo.dp} style={adminCircle} />
-          <h2 style={{textAlign:'center'}}>{adminInfo.name} - Match Setup</h2>
-          <form onSubmit={handleSetup} style={formStyle}>
-            <input name="tA" placeholder="Team A Name" required style={input} />
-            <textarea name="pA" placeholder="Team A Players (Ali, Ahmed, Khan...)" required style={input} />
-            <input name="tB" placeholder="Team B Name" required style={input} />
-            <textarea name="pB" placeholder="Team B Players (Abid, Jani, Rafi...)" required style={input} />
-            <input name="umpire" placeholder="Umpire Name" style={input} />
-            <input name="toss" placeholder="Who won the toss?" style={input} />
-            <button type="submit" style={mainBtn}>START MATCH</button>
+      <div style={setupCont}>
+        <div style={setupCard}>
+          <img src={ADMIN.dp} style={setupDP} />
+          <h2 style={{textAlign:'center', color:'#f5cd11'}}>{ADMIN.name} Setup</h2>
+          <form onSubmit={startMatch} style={form}>
+            <input name="tA" placeholder="Team A (Batting First)" required style={input} />
+            <textarea name="pA" placeholder="Team A Players (Comma separated)" required style={area} />
+            <input name="tB" placeholder="Team B (Bowling First)" required style={input} />
+            <textarea name="pB" placeholder="Team B Players (Comma separated)" required style={area} />
+            <button type="submit" style={goBtn}>START PRO MATCH</button>
           </form>
         </div>
       </div>
     );
   }
 
+  const batTeamKey = match.innings === 1 ? 'teamA' : 'teamB';
+  const bowlTeamKey = match.innings === 1 ? 'teamB' : 'teamA';
+
   return (
-    <div style={liveContainer}>
-      {/* Header */}
+    <div style={appWrap}>
       <div style={header}>
         <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-          <img src={adminInfo.dp} style={miniDP} />
-          <span style={headerText}>ADHI KOT CRICKET PRO</span>
+          <img src={ADMIN.dp} style={miniDP} />
+          <span style={headText}>{ADMIN.name} PRO</span>
         </div>
-        <a href={`https://wa.me/${adminInfo.whatsapp}`} style={waBtn}>WhatsApp</a>
+        <a href={`https://wa.me/${ADMIN.wa}`} style={waBtn}>WhatsApp</a>
       </div>
 
-      {/* Scoreboard */}
-      <div style={scoreCard}>
-        <div style={teamHeader}>{match.teamA.name} vs {match.teamB.name}</div>
-        <div style={umpireLine}>Umpire: {match.umpire} | Toss: {match.toss}</div>
-        
-        <div style={mainScore}>{match.score}/{match.wickets} <span style={{fontSize:'24px'}}>({match.overs}.{match.balls})</span></div>
+      <div style={scoreZone}>
+        <div style={vsLine}>
+          <span onClick={() => setModal({type:'striker', team:batTeamKey})}>{match.teamA.name}</span>
+          <span style={{color:'#f5cd11'}}>VS</span>
+          <span onClick={() => setModal({type:'bowler', team:bowlTeamKey})}>{match.teamB.name}</span>
+        </div>
 
-        <div style={statsSection}>
-          <div style={playerLine} onClick={() => setModal('striker')}>
-            🏏 {match.striker.name}* <span>{match.striker.index !== undefined ? `${match[match.innings === 1 ? 'teamA' : 'teamB'].players[match.striker.index].runs}(${match[match.innings === 1 ? 'teamA' : 'teamB'].players[match.striker.index].balls})` : "0(0)"}</span>
+        <div style={bigNum}>{match.score}/{match.wickets} <small>({match.overs}.{match.balls})</small></div>
+
+        <div style={battingBox}>
+          <div style={playerRow} onClick={() => setModal({type:'striker', team:batTeamKey})}>
+            🏏 {match.striker.name}* <span>{match.striker.idx !== -1 ? `${match[batTeamKey].players[match.striker.idx].runs}(${match[batTeamKey].players[match.striker.idx].balls})` : ""}</span>
           </div>
-          <div style={playerLine}>
-            🏏 {match.nonStriker.name}
+          <div style={playerRow} onClick={() => setModal({type:'nonStriker', team:batTeamKey})}>
+            🏏 {match.nonStriker.name} 
+            <span>{match.nonStriker.idx !== -1 ? `${match[batTeamKey].players[match.nonStriker.idx].runs}(${match[batTeamKey].players[match.nonStriker.idx].balls})` : ""}</span>
           </div>
-          <div style={bowlerLine} onClick={() => setModal('bowler')}>
-            🎾 Bowler: {match.bowler.name} <span>{match.bowler.wkts} Wkts</span>
+          <div style={bowlRow} onClick={() => setModal({type:'bowler', team:bowlTeamKey})}>
+            🎾 {match.bowler.name}
           </div>
         </div>
       </div>
 
-      {/* Controls */}
       <div style={btnGrid}>
-        {[0, 1, 2, 3, 4, 6].map(r => <button key={r} onClick={() => updateBall(r)} style={numBtn}>{r}</button>)}
-        <button onClick={() => updateBall(0, "WD")} style={extraBtn}>WD</button>
-        <button onClick={() => updateBall(0, "NB")} style={extraBtn}>NB</button>
-        <button onClick={() => updateBall(0, "W")} style={wktBtn}>WICKET</button>
-        <button onClick={() => { remove(ref(db, 'liveMatch')); setView("setup"); }} style={resetBtn}>Delete Match</button>
+        {[0,1,2,3,4,6].map(n => <button key={n} onClick={() => updateScore(n)} style={numBtn}>{n}</button>)}
+        <button onClick={() => updateScore(0, "WD")} style={exBtn}>WD</button>
+        <button onClick={() => updateScore(0, "NB")} style={exBtn}>NB</button>
+        <button onClick={() => updateScore(0, "W")} style={wktBtn}>WICKET</button>
+        <button onClick={() => {if(confirm("New Match?")) set(ref(db, 'liveMatch'), null); setIsSetup(true);}} style={reset}>Reset</button>
       </div>
 
-      {/* Animations Overlay */}
-      {anim && <div style={animOverlay}>{anim}</div>}
-
-      {/* Player Selection Modal */}
       {modal && (
-        <div style={modalOverlay}>
+        <div style={modalBg}>
           <div style={modalContent}>
-            <h3>Select {modal}</h3>
-            {match[match.innings === 1 ? 'teamA' : 'teamB'].players.map((p: any, i: number) => (
-              <div key={i} onClick={() => selectPlayer(modal, p, i)} style={modalItem}>{p.name}</div>
+            <h3>Select Player ({modal.team === 'teamA' ? match.teamA.name : match.teamB.name})</h3>
+            {match[modal.team].players.map((p: any, i: number) => (
+              <div key={i} onClick={() => setPlayer(p, i)} style={playerItem}>{p.name}</div>
             ))}
             <button onClick={() => setModal(null)} style={closeBtn}>Cancel</button>
           </div>
@@ -194,32 +173,31 @@ export default function AdhiKotUltimateCricket() {
   );
 }
 
-// Styles
-const container: any = { background: '#0f172a', minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white' };
-const card: any = { background: '#1e293b', padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '400px' };
-const adminCircle: any = { width: '80px', height: '80px', borderRadius: '50%', margin: '0 auto 20px', display: 'block', border: '3px solid #f5cd11' };
-const formStyle: any = { display: 'flex', flexDirection: 'column', gap: '12px' };
+// STYLES
+const setupCont: any = { background: '#0f172a', minHeight: '100vh', display: 'flex', justifyContent: 'center', padding: '20px' };
+const setupCard: any = { background: '#1e293b', padding: '25px', borderRadius: '20px', width: '100%', maxWidth: '450px' };
+const setupDP: any = { width: '80px', height: '80px', borderRadius: '50%', margin: '0 auto 15px', display: 'block', border: '3px solid #f5cd11' };
+const form: any = { display: 'flex', flexDirection: 'column', gap: '15px' };
 const input: any = { padding: '12px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: 'white' };
-const mainBtn: any = { background: '#f5cd11', color: 'black', padding: '15px', border: 'none', borderRadius: '10px', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' };
-const liveContainer: any = { background: '#0f172a', minHeight: '100vh', color: 'white' };
-const header: any = { padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#1e293b', borderBottom: '2px solid #f5cd11' };
-const miniDP: any = { width: '35px', height: '35px', borderRadius: '50%' };
-const headerText: any = { fontWeight: 'bold', fontSize: '14px', color: '#f5cd11' };
-const waBtn: any = { background: '#25D366', color: 'white', padding: '6px 12px', borderRadius: '20px', fontSize: '12px', textDecoration: 'none' };
-const scoreCard: any = { margin: '20px', padding: '20px', background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', borderRadius: '25px', border: '1px solid #334155', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' };
-const teamHeader: any = { fontSize: '16px', fontWeight: 'bold', textAlign: 'center', color: '#94a3b8' };
-const umpireLine: any = { fontSize: '11px', textAlign: 'center', color: '#64748b', margin: '5px 0' };
-const mainScore: any = { fontSize: '60px', textAlign: 'center', margin: '15px 0', fontWeight: '900' };
-const statsSection: any = { marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '10px' };
-const playerLine: any = { display: 'flex', justifyContent: 'space-between', padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '10px' };
-const bowlerLine: any = { display: 'flex', justifyContent: 'space-between', padding: '12px', background: 'rgba(245, 205, 17, 0.1)', borderRadius: '10px', color: '#f5cd11' };
+const area: any = { padding: '12px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: 'white', minHeight: '80px' };
+const goBtn: any = { background: '#f5cd11', padding: '15px', border: 'none', borderRadius: '10px', fontWeight: 'bold' };
+const appWrap: any = { background: '#0f172a', minHeight: '100vh', color: 'white' };
+const header: any = { display: 'flex', justifyContent: 'space-between', padding: '15px', background: '#1e293b', borderBottom: '2px solid #f5cd11' };
+const miniDP: any = { width: '35px', height: '35px', borderRadius: '50%', border: '1px solid #f5cd11' };
+const headText: any = { fontWeight: 'bold', fontSize: '14px', color: '#f5cd11' };
+const waBtn: any = { background: '#25D366', color: 'white', padding: '6px 12px', borderRadius: '20px', textDecoration: 'none', fontSize: '12px' };
+const scoreZone: any = { margin: '20px', padding: '20px', background: 'linear-gradient(to bottom, #1e293b, #0f172a)', borderRadius: '25px', border: '1px solid #334155' };
+const vsLine: any = { display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', color: '#94a3b8' };
+const bigNum: any = { fontSize: '55px', textAlign: 'center', margin: '20px 0', fontWeight: 'bold' };
+const battingBox: any = { display: 'flex', flexDirection: 'column', gap: '10px' };
+const playerRow: any = { display: 'flex', justifyContent: 'space-between', padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '10px', cursor: 'pointer' };
+const bowlRow: any = { padding: '12px', background: 'rgba(245, 205, 17, 0.1)', borderRadius: '10px', color: '#f5cd11', cursor: 'pointer' };
 const btnGrid: any = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', padding: '20px' };
-const numBtn: any = { padding: '20px', borderRadius: '12px', background: 'white', color: '#0f172a', fontWeight: 'bold', fontSize: '18px', border: 'none' };
-const extraBtn: any = { background: '#f5cd11', color: 'black', borderRadius: '12px', border: 'none', fontWeight: 'bold' };
+const numBtn: any = { padding: '20px', borderRadius: '12px', background: 'white', color: '#0f172a', fontWeight: 'bold', border: 'none' };
+const exBtn: any = { background: '#f5cd11', color: 'black', borderRadius: '12px', border: 'none', fontWeight: 'bold' };
 const wktBtn: any = { gridColumn: 'span 2', background: '#ef4444', color: 'white', borderRadius: '12px', border: 'none', fontWeight: 'bold' };
-const resetBtn: any = { gridColumn: 'span 4', background: '#334155', color: '#94a3b8', padding: '10px', border: 'none', borderRadius: '8px', marginTop: '10px' };
-const animOverlay: any = { position: 'fixed', top: '40%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '50px', fontWeight: '900', color: '#f5cd11', textShadow: '0 0 20px black', zIndex: 1000 };
-const modalOverlay: any = { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 };
-const modalContent: any = { background: '#1e293b', padding: '20px', borderRadius: '15px', width: '80%', maxHeight: '70%', overflowY: 'auto' };
-const modalItem: any = { padding: '15px', borderBottom: '1px solid #334155', cursor: 'pointer' };
-const closeBtn: any = { width: '100%', padding: '10px', marginTop: '10px', background: '#ef4444', border: 'none', borderRadius: '8px', color: 'white' };
+const reset: any = { gridColumn: 'span 4', background: '#334155', color: '#94a3b8', border: 'none', borderRadius: '8px', padding: '10px' };
+const modalBg: any = { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center' };
+const modalContent: any = { background: '#1e293b', padding: '20px', borderRadius: '15px', width: '85%', maxHeight: '80%', overflowY: 'auto' };
+const playerItem: any = { padding: '15px', borderBottom: '1px solid #334155', cursor: 'pointer' };
+const closeBtn: any = { width: '100%', padding: '12px', marginTop: '10px', background: '#ef4444', border: 'none', borderRadius: '10px', color: 'white' };
