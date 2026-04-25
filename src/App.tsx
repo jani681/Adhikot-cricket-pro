@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, set, onValue, remove } from "firebase/database";
+import { getDatabase, ref, set, onValue, push, remove } from "firebase/database";
 
 const firebaseConfig = {
   apiKey: "AIzaSyB0e37uvyY7Jpuj-FYxDlX52hjb0uwsBfg",
@@ -12,29 +12,26 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
+// ADMIN CONFIG
 const ADMIN_NAME = "Touqeer Iqbal";
-const ADMIN_DP = "https://i.ibb.co/vzYyLz7/touqeer.jpg"; 
+const ADMIN_DP = "https://i.ibb.co/vzYyLz7/touqeer.jpg";
 const ADMIN_WA = "923015800630";
 
-export default function AdhiKotProIntelligent() {
+export default function AdhiKotUltimateCricket() {
   const [match, setMatch] = useState<any>(null);
-  const [modal, setModal] = useState<{type: string, teamKey: string} | null>(null);
-  const [isSetup, setIsSetup] = useState(true);
-  const [loading, setLoading] = useState(true);
+  const [history, setHistory] = useState<any[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false); // Admin Toggle
+  const [view, setView] = useState<'live' | 'history' | 'setup'>('live');
   const [animation, setAnimation] = useState("");
 
   useEffect(() => {
-    const unsub = onValue(ref(db, 'liveMatch'), (snap) => {
+    // Sync Live Match
+    onValue(ref(db, 'liveMatch'), (snap) => setMatch(snap.val()));
+    // Sync History
+    onValue(ref(db, 'matchHistory'), (snap) => {
       const data = snap.val();
-      if (data && data.teamA) {
-        setMatch(data);
-        setIsSetup(false);
-      } else {
-        setIsSetup(true);
-      }
-      setLoading(false);
+      if (data) setHistory(Object.values(data));
     });
-    return () => unsub();
   }, []);
 
   const triggerAnimation = (text: string) => {
@@ -42,178 +39,179 @@ export default function AdhiKotProIntelligent() {
     setTimeout(() => setAnimation(""), 2500);
   };
 
-  const handleStart = (e: any) => {
+  const handleCreateMatch = (e: any) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const pA = (fd.get("pA") as string || "").split(",").map(n => ({ name: n.trim(), runs: 0, balls: 0, out: false }));
-    const pB = (fd.get("pB") as string || "").split(",").map(n => ({ name: n.trim(), runs: 0, balls: 0, out: false }));
+    const pA = (fd.get("pA") as string).split(",").map(n => ({ name: n.trim(), runs: 0, balls: 0, out: false }));
+    const pB = (fd.get("pB") as string).split(",").map(n => ({ name: n.trim(), runs: 0, balls: 0, out: false }));
 
-    const initialData = {
-      league: fd.get("league") || "ADHI KOT LEAGUE",
-      umpire: fd.get("umpire") || "Not Assigned",
-      toss: fd.get("toss") || "TBD",
+    const newMatch = {
+      id: Date.now(),
+      leagueName: fd.get("league") || "Local Match",
+      ground: fd.get("ground") || "Adhi Kot Stadium",
+      dateTime: `${fd.get("date")} ${fd.get("time")}`,
+      umpire: fd.get("umpire") || "Neutral",
       oversTotal: parseInt(fd.get("overs") as string) || 5,
       teamA: { name: fd.get("tA"), players: pA },
       teamB: { name: fd.get("tB"), players: pB },
-      score: 0, wickets: 0, balls: 0, overs: 0, innings: 1, target: null,
-      striker: { name: "Select Striker", idx: -1 },
-      nonStriker: { name: "Select Non-Striker", idx: -1 },
-      bowler: { name: "Select Bowler" },
+      score: 0, wickets: 0, balls: 0, overs: 0, innings: 1,
+      striker: { name: pA[0].name, idx: 0, runs: 0, balls: 0 },
+      nonStriker: { name: pA[1].name, idx: 1, runs: 0, balls: 0 },
+      bowler: { name: pB[0].name, runs: 0, wkts: 0, balls: 0 },
       status: "Live"
     };
-    set(ref(db, 'liveMatch'), initialData);
+    set(ref(db, 'liveMatch'), newMatch);
+    setView('live');
   };
 
-  const updateBall = (runs: number, type: string = "normal") => {
-    if (!match || match.status === "Match Ended") return;
-    if (match.striker.idx === -1) { alert("Please select a Batsman!"); return; }
-
+  const updateScore = (runs: number, type = "normal") => {
+    if (!match || !isAdmin) return;
     let m = { ...match };
-    const batTeamKey = m.innings === 1 ? 'teamA' : 'teamB';
-
+    
     if (type === "W") {
       m.wickets += 1;
       m.balls += 1;
-      m[batTeamKey].players[m.striker.idx].balls += 1;
-      m[batTeamKey].players[m.striker.idx].out = true;
-      m.striker = { name: "Select Batsman", idx: -1 };
+      m.bowler.balls += 1;
       triggerAnimation("☝️ OUT!");
     } else if (type === "WD" || type === "NB") {
       m.score += (1 + runs);
-      if (type === "NB") triggerAnimation("🆓 Free Hit!");
+      m.bowler.runs += (1 + runs);
+      if (type === "NB") triggerAnimation("🆓 FREE HIT!");
     } else {
       m.score += runs;
       m.balls += 1;
-      m[batTeamKey].players[m.striker.idx].runs += runs;
-      m[batTeamKey].players[m.striker.idx].balls += 1;
+      m.striker.runs += runs;
+      m.striker.balls += 1;
+      m.bowler.runs += runs;
+      m.bowler.balls += 1;
       if (runs === 4) triggerAnimation("🏏 FOUR!");
-      if (runs === 6) triggerAnimation("🚀 SIX!");
-      if (runs % 2 !== 0) { let t = m.striker; m.striker = m.nonStriker; m.nonStriker = t; }
+      if (runs === 6) triggerAnimation("🚀 SIXER!");
     }
 
+    // Over Change
     if (m.balls >= 6) {
       m.overs += 1; m.balls = 0;
-      let t = m.striker; m.striker = m.nonStriker; m.nonStriker = t;
-      m.bowler.name = "Select Bowler";
     }
 
-    // Intelligent Logic
-    if (m.innings === 1 && (m.wickets >= m[batTeamKey].players.length - 1 || m.overs >= m.oversTotal)) {
-      m.target = m.score + 1;
-      m.innings = 2; m.score = 0; m.wickets = 0; m.balls = 0; m.overs = 0;
-      m.striker = { name: "Select Striker", idx: -1 };
-      m.nonStriker = { name: "Select Non-Striker", idx: -1 };
-      triggerAnimation("✅ Target Set: " + m.target);
-    } else if (m.innings === 2) {
-      if (m.score >= m.target) { m.status = "Match Ended"; m.winMsg = "Chasing Team Won!"; }
-      else if (m.wickets >= m[batTeamKey].players.length - 1 || m.overs >= m.oversTotal) {
-        m.status = "Match Ended"; m.winMsg = "Defending Team Won!";
-      }
-    }
     set(ref(db, 'liveMatch'), m);
   };
 
-  const selectPlayer = (role: string, player: any, i: number) => {
-    let m = { ...match };
-    if (role === 'striker') m.striker = { name: player.name, idx: i };
-    if (role === 'nonStriker') m.nonStriker = { name: player.name, idx: i };
-    if (role === 'bowler') m.bowler.name = player.name;
-    set(ref(db, 'liveMatch'), m);
-    setModal(null);
+  const saveToHistory = () => {
+    if (match) {
+      push(ref(db, 'matchHistory'), { ...match, status: "Completed" });
+      remove(ref(db, 'liveMatch'));
+      alert("Match Saved to Records!");
+    }
   };
-
-  if (loading) return <div style={st.loader}>SYNCING...</div>;
-
-  if (isSetup) return (
-    <div style={st.sContainer}>
-      <div style={st.sCard}>
-        <img src={ADMIN_DP} style={st.sDP}/>
-        <h2 style={st.sTitle}>ADHI KOT PRO SETUP</h2>
-        <form onSubmit={handleStart} style={st.fStyle}>
-          <input name="league" placeholder="League Name" style={st.inp} />
-          <input name="overs" placeholder="Overs" type="number" style={st.inp} />
-          <input name="tA" placeholder="Team A (Batting)" style={st.inp} />
-          <textarea name="pA" placeholder="Team A Players (Ali, Ahmed...)" style={st.aArea} />
-          <input name="tB" placeholder="Team B (Bowling)" style={st.inp} />
-          <textarea name="pB" placeholder="Team B Players (Zaid, Khan...)" style={st.aArea} />
-          <button type="submit" style={st.goBtn}>START MATCH</button>
-        </form>
-      </div>
-    </div>
-  );
-
-  const curBat = match.innings === 1 ? 'teamA' : 'teamB';
-  const curBowl = match.innings === 1 ? 'teamB' : 'teamA';
 
   return (
-    <div style={st.appWrap}>
+    <div style={st.container}>
+      {/* HEADER */}
       <div style={st.header}>
-        <span style={st.hText}>{match.league} | {ADMIN_NAME}</span>
-        <a href={`https://wa.me/${ADMIN_WA}`} style={st.waBtn}>WhatsApp</a>
-      </div>
-
-      <div style={st.liveCard}>
-        <div style={st.bigScore}>{match.score}/{match.wickets} <small>({match.overs}.{match.balls})</small></div>
-        {match.target && <div style={st.targetLine}>Target: {match.target} | {match.winMsg}</div>}
-        
-        <div style={st.playersBox}>
-          <div style={st.row} onClick={()=>setModal({type:'striker', teamKey:curBat})}>🏏 {match.striker?.name}*</div>
-          <div style={st.row} onClick={()=>setModal({type:'nonStriker', teamKey:curBat})}>🏏 {match.nonStriker?.name}</div>
-          <div style={st.bowlBtn} onClick={()=>setModal({type:'bowler', teamKey:curBowl})}>⚪ {match.bowler?.name}</div>
-        </div>
-      </div>
-
-      <div style={st.controlGrid}>
-        {[0, 1, 2, 3, 4, 6].map(n => <button key={n} onClick={() => updateBall(n)} style={st.nBtn}>{n}</button>)}
-        <button onClick={() => updateBall(0, "WD")} style={st.eBtn}>WD</button>
-        <button onClick={() => updateBall(0, "NB")} style={st.eBtn}>NB</button>
-        <button onClick={() => updateBall(0, "W")} style={st.wBtn}>WICKET</button>
-      </div>
-
-      <button onClick={() => remove(ref(db, 'liveMatch'))} style={st.delBtn}>End/Delete Match</button>
-
-      {animation && <div style={st.overlayAni}>{animation}</div>}
-
-      {modal && (
-        <div style={st.modalBg} onClick={() => setModal(null)}>
-          <div style={st.modalContent} onClick={e => e.stopPropagation()}>
-            {match[modal.teamKey].players.map((p: any, i: number) => (
-              <div key={i} onClick={() => selectPlayer(modal.type, p, i)} style={st.pItm}>{p.name}</div>
-            ))}
+        <div style={{display:'flex', gap:'10px', alignItems:'center'}}>
+          <img src={ADMIN_DP} style={st.adminDp} onClick={() => setIsAdmin(!isAdmin)} title="Tap to Toggle Admin" />
+          <div>
+            <div style={st.appTitle}>ADHI KOT CRICKET PRO</div>
+            <div style={st.adminTag}>{isAdmin ? "ADMIN MODE" : "VIEWER MODE"}</div>
           </div>
         </div>
+        <div style={{display:'flex', gap:'5px'}}>
+           <button onClick={() => setView('live')} style={st.navBtn}>Live</button>
+           <button onClick={() => setView('history')} style={st.navBtn}>History</button>
+           {isAdmin && <button onClick={() => setView('setup')} style={st.navBtn}>+</button>}
+        </div>
+      </div>
+
+      {/* VIEW: SETUP */}
+      {view === 'setup' && (
+        <form onSubmit={handleCreateMatch} style={st.form}>
+          <input name="league" placeholder="League Name" style={st.inp} required />
+          <div style={{display:'flex', gap:'5px'}}>
+            <input name="date" type="date" style={st.inp} required />
+            <input name="time" type="time" style={st.inp} required />
+          </div>
+          <input name="ground" placeholder="Ground Name" style={st.inp} required />
+          <input name="umpire" placeholder="Umpire Name" style={st.inp} />
+          <input name="overs" placeholder="Overs" type="number" style={st.inp} required />
+          <input name="tA" placeholder="Batting Team" style={st.inp} required />
+          <textarea name="pA" placeholder="Players (Ali, Ahmed...)" style={st.area} required />
+          <input name="tB" placeholder="Bowling Team" style={st.inp} required />
+          <textarea name="pB" placeholder="Players (Zaid, Khan...)" style={st.area} required />
+          <button type="submit" style={st.mainBtn}>CREATE MATCH</button>
+        </form>
       )}
+
+      {/* VIEW: LIVE SCORECARD */}
+      {view === 'live' && match && (
+        <div style={st.card}>
+          <div style={st.matchInfo}>
+            {match.leagueName} | {match.ground} <br/>
+            Umpire: {match.umpire} | {match.dateTime}
+          </div>
+          <div style={st.mainScore}>{match.score}/{match.wickets} <small>({match.overs}.{match.balls})</small></div>
+          
+          <div style={st.statsBox}>
+             <div style={st.statRow}>🏏 {match.striker.name}* <span>{match.striker.runs}({match.striker.balls})</span></div>
+             <div style={st.statRow}>🏏 {match.nonStriker.name} <span>{match.nonStriker.runs}({match.nonStriker.balls})</span></div>
+             <div style={st.statRowBowl}>⚪ {match.bowler.name} <span>{match.bowler.wkts} Wkts / {match.bowler.runs} Runs</span></div>
+          </div>
+
+          {isAdmin && (
+            <div style={st.controls}>
+              {[0,1,2,3,4,6].map(n => <button key={n} onClick={()=>updateScore(n)} style={st.scoreBtn}>{n}</button>)}
+              <button onClick={()=>updateScore(0,"WD")} style={st.extraBtn}>WD</button>
+              <button onClick={()=>updateScore(0,"NB")} style={st.extraBtn}>NB</button>
+              <button onClick={()=>updateScore(0,"W")} style={st.wktBtn}>WICKET</button>
+              <button onClick={saveToHistory} style={st.saveBtn}>SAVE MATCH</button>
+            </div>
+          )}
+          <a href={`https://wa.me/${ADMIN_WA}`} style={st.waFloat}>Contact Admin</a>
+        </div>
+      )}
+
+      {/* VIEW: HISTORY */}
+      {view === 'history' && (
+        <div style={{padding:'10px'}}>
+          <h3 style={{color:'#f5cd11'}}>Match Records</h3>
+          {history.length === 0 && <p>No records found.</p>}
+          {history.map((h, i) => (
+            <div key={i} style={st.historyCard}>
+              <div style={{fontWeight:'bold'}}>{h.teamA.name} vs {h.teamB.name}</div>
+              <div style={{fontSize:'12px'}}>{h.leagueName} | {h.dateTime}</div>
+              <div style={{color:'#f5cd11'}}>Result: {h.score}/{h.wickets} in {h.overs} Overs</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {animation && <div style={st.aniOverlay}>{animation}</div>}
     </div>
   );
 }
 
 const st: any = {
-  loader: { background: '#0a0f1e', color: '#f5cd11', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' },
-  sContainer: { background: '#0a0f1e', minHeight: '100vh', padding: '20px', color: 'white' },
-  sCard: { background: '#161d31', padding: '20px', borderRadius: '20px', border: '2px solid #f5cd11' },
-  sDP: { width: '60px', height: '60px', borderRadius: '50%', margin: '0 auto 10px', display: 'block' },
-  sTitle: { textAlign: 'center', color: '#f5cd11', fontSize: '18px' },
-  fStyle: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  inp: { padding: '10px', background: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '8px' },
-  aArea: { padding: '10px', background: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '8px', minHeight: '50px' },
-  goBtn: { background: '#f5cd11', padding: '12px', border: 'none', borderRadius: '10px', fontWeight: 'bold' },
-  appWrap: { background: '#0a0f1e', minHeight: '100vh', color: 'white' },
-  header: { display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#161d31', borderBottom: '1px solid #f5cd11' },
-  hText: { color: '#f5cd11', fontSize: '12px' },
-  waBtn: { background: '#25D366', color: 'white', padding: '4px 10px', borderRadius: '15px', textDecoration: 'none', fontSize: '10px' },
-  liveCard: { margin: '10px', padding: '15px', background: '#161d31', borderRadius: '20px' },
-  bigScore: { fontSize: '45px', textAlign: 'center', fontWeight: 'bold' },
-  targetLine: { textAlign: 'center', color: '#f5cd11', fontSize: '12px', margin: '5px 0' },
-  playersBox: { display: 'flex', flexDirection: 'column', gap: '5px', marginTop: '10px' },
-  row: { display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#334155', borderRadius: '8px' },
-  bowlBtn: { padding: '10px', background: 'rgba(245,205,17,0.1)', color: '#f5cd11', borderRadius: '8px', textAlign: 'center' },
-  controlGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', padding: '10px' },
-  nBtn: { padding: '15px', background: 'white', color: 'black', borderRadius: '8px', border: 'none', fontWeight: 'bold' },
-  eBtn: { background: '#f5cd11', borderRadius: '8px', border: 'none', fontWeight: 'bold' },
-  wBtn: { gridColumn: 'span 2', background: '#ef4444', color: 'white', borderRadius: '8px', border: 'none', fontWeight: 'bold' },
-  delBtn: { width: '95%', margin: '10px auto', display: 'block', padding: '10px', background: '#334155', border: 'none', borderRadius: '8px', color: '#94a3b8' },
-  overlayAni: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '30px', color: '#f5cd11', zIndex: 100 },
-  modalBg: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { background: '#161d31', padding: '20px', borderRadius: '15px', width: '80%' },
-  pItm: { padding: '12px', borderBottom: '1px solid #334155', textAlign: 'center' }
+  container: { background: '#0a0f1e', minHeight: '100vh', color: 'white', fontFamily: 'sans-serif' },
+  header: { background: '#161d31', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #f5cd11' },
+  adminDp: { width: '45px', height: '45px', borderRadius: '50%', border: '2px solid #f5cd11' },
+  appTitle: { fontSize: '14px', fontWeight: 'bold', color: '#f5cd11' },
+  adminTag: { fontSize: '10px', color: '#94a3b8' },
+  navBtn: { background: '#334155', border: 'none', color: 'white', padding: '5px 10px', borderRadius: '5px', fontSize: '12px' },
+  form: { padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' },
+  inp: { padding: '12px', background: '#161d31', border: '1px solid #334155', color: 'white', borderRadius: '8px' },
+  area: { padding: '12px', background: '#161d31', border: '1px solid #334155', color: 'white', borderRadius: '8px', height: '60px' },
+  mainBtn: { background: '#f5cd11', color: 'black', padding: '15px', border: 'none', borderRadius: '10px', fontWeight: 'bold' },
+  card: { margin: '15px', padding: '20px', background: 'linear-gradient(145deg, #1e293b, #0f172a)', borderRadius: '25px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' },
+  matchInfo: { textAlign: 'center', fontSize: '12px', color: '#94a3b8', marginBottom: '15px' },
+  mainScore: { fontSize: '60px', textAlign: 'center', fontWeight: 'bold', textShadow: '2px 2px 10px rgba(245,205,17,0.3)' },
+  statsBox: { background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '15px', marginTop: '20px' },
+  statRow: { display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #334155' },
+  statRowBowl: { display: 'flex', justifyContent: 'space-between', padding: '8px 0', color: '#f5cd11' },
+  controls: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginTop: '20px' },
+  scoreBtn: { padding: '15px', background: 'white', color: 'black', border: 'none', borderRadius: '10px', fontWeight: 'bold' },
+  extraBtn: { background: '#f5cd11', color: 'black', border: 'none', borderRadius: '10px', fontWeight: 'bold' },
+  wktBtn: { gridColumn: 'span 2', background: '#ef4444', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 'bold' },
+  saveBtn: { gridColumn: 'span 4', background: '#10b981', color: 'white', padding: '10px', marginTop: '10px', border: 'none', borderRadius: '10px' },
+  waFloat: { display: 'block', textAlign: 'center', marginTop: '15px', color: '#25D366', textDecoration: 'none', fontSize: '12px' },
+  historyCard: { background: '#161d31', padding: '15px', borderRadius: '10px', marginBottom: '10px', borderLeft: '4px solid #f5cd11' },
+  aniOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '40px', color: '#f5cd11', fontWeight: 'bold', zIndex: 999 }
 };
