@@ -1,222 +1,213 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, set, onValue, update, push, remove } from "firebase/database";
+import { getDatabase, ref, set, onValue, push, remove } from "firebase/database";
 
-// Firebase Config
+// --- FIREBASE CONFIG ---
 const firebaseConfig = {
-  apiKey: "AIzaSyB0e37uvyY7Jpuj-FYxDlX52hjb0uwsBfg",
+  apiKey: "AIzaSyB0e37uvyY7Jpuj-FYxDlX52hjb0uwsBfg", // Make sure this matches your project
   databaseURL: "https://adhikot-cricket-pro-default-rtdb.firebaseio.com"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-
 const ADMIN_PASS = "6545";
 
-export default function IntelligentCricketApp() {
+export default function CricketApp() {
   const [match, setMatch] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [view, setView] = useState<'live' | 'setup' | 'login' | 'history'>('live');
   const [isAdmin, setIsAdmin] = useState(false);
-  const [passInp, setPassInp] = useState("");
-  const [showTeam, setShowTeam] = useState<number | null>(null);
-  const [anim, setAnim] = useState("");
+  const [passInput, setPassInput] = useState("");
+  const [animation, setAnimation] = useState("");
+  const [activeTeamView, setActiveTeamView] = useState<number | null>(null);
 
+  // Persistence for user login
   useEffect(() => {
-    onValue(ref(db, 'liveMatch'), (snap) => setMatch(snap.val()));
+    const isLogged = localStorage.getItem('isCricketAdmin');
+    if (isLogged === 'true') setIsAdmin(true);
+
+    onValue(ref(db, 'liveMatch'), (snap) => {
+      setMatch(snap.val());
+    });
+
     onValue(ref(db, 'history'), (snap) => {
       const data = snap.val();
       setHistory(data ? Object.entries(data).map(([id, val]: any) => ({ ...val, id })) : []);
     });
   }, []);
 
-  // --- Logic Functions ---
-  const triggerAnim = (txt: string) => {
-    setAnim(txt);
-    setTimeout(() => setAnim(""), 2500);
+  const triggerAnim = (text: string) => {
+    setAnimation(text);
+    setTimeout(() => setAnimation(""), 3000);
   };
 
-  const handleScore = (runs: number, extra: string = "") => {
+  const handleScore = (runs: number, type: string = "normal") => {
     if (!match || !isAdmin) return;
     let m = { ...match };
-    const sIdx = m.team1.players.findIndex((p: any) => p.name === m.striker?.name);
-    const bIdx = m.team2.players.findIndex((p: any) => p.name === m.bowler?.name);
-
-    if (extra === "W") {
+    
+    // Intelligent Stats System
+    if (type === "W") {
       m.wkts += 1; m.balls += 1; triggerAnim("OUT!");
-      if (sIdx !== -1) m.team1.players[sIdx].b += 1;
-      m.striker = null;
-      m.freeHit = false;
-    } else if (extra === "NB" || extra === "WD") {
-      m.score += (runs + 1);
-      triggerAnim(extra);
-      if (extra === "NB") m.freeHit = true;
-      if (bIdx !== -1) m.team2.players[bIdx].r += (runs + 1);
+      m.striker = null; // Forces admin to select new batsman
+    } else if (type === "NB") {
+      m.score += (runs + 1); m.freeHit = true; triggerAnim("NO BALL + FREE HIT");
+    } else if (type === "WD") {
+      m.score += (runs + 1); triggerAnim("WIDE");
     } else {
-      m.score += runs; m.balls += 1;
-      if (runs === 4) triggerAnim("FOUR!");
-      if (runs === 6) triggerAnim("SIX!");
-      if (sIdx !== -1) {
-        m.team1.players[sIdx].r += runs;
-        m.team1.players[sIdx].b += 1;
-        if (runs === 4) m.team1.players[sIdx].f4 += 1;
-        if (runs === 6) m.team1.players[sIdx].s6 += 1;
-      }
-      if (bIdx !== -1) m.team2.players[bIdx].r += runs;
+      m.score += runs; m.balls += 1; m.freeHit = false;
+      if (runs === 4) triggerAnim("FOUR! 🔥");
+      if (runs === 6) triggerAnim("SIXER! 🚀");
       if (runs % 2 !== 0) [m.striker, m.nonStriker] = [m.nonStriker, m.striker];
-      m.freeHit = false;
     }
 
     if (m.balls === 6) {
       m.ovs += 1; m.balls = 0;
-      if (bIdx !== -1) m.team2.players[bIdx].o += 1;
       [m.striker, m.nonStriker] = [m.nonStriker, m.striker];
-      m.bowler = null;
+      m.bowler = null; // Reset bowler for next over
     }
+
     set(ref(db, 'liveMatch'), m);
   };
 
-  const saveToHistory = () => {
-    if (match) {
-      push(ref(db, 'history'), { ...match, date: new Date().toLocaleDateString() });
-      remove(ref(db, 'liveMatch'));
-    }
-  };
-
-  const sendWhatsApp = (p: any) => {
-    const msg = `🏏 Live Update\nMatch: ${match.team1.name} vs ${match.team2.name}\nScore: ${match.score}/${match.wkts} (${match.ovs}.${match.balls})\nUmpire: ${match.umpire}\nTarget: ${match.target || 'N/A'}`;
-    window.open(`https://wa.me/${p.phone || '923015800630'}?text=${encodeURIComponent(msg)}`, '_blank');
+  const sendWhatsAppUpdate = (p: any) => {
+    const text = `🏏 *Live Match Update*\n🏆 ${match.league}\n🏟️ ${match.ground}\n⚡ ${match.team1.name} vs ${match.team2.name}\n📊 Score: ${match.score}/${match.wkts}\n🥎 Overs: ${match.ovs}.${match.balls}\n👤 Umpire: ${match.umpire}\n🎯 Target: ${match.target || 'N/A'}`;
+    window.open(`https://wa.me/${p.phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   return (
-    <div style={s.app}>
-      {/* HEADER */}
-      <div style={s.header}>
-        <div style={s.row}>
-          <div style={s.avatar}>T</div>
-          <div style={{ flex: 1 }}>
-            <div style={s.hName}>Touqeer Iqbal Baghoor</div>
-            <div style={s.hSub}>Umpire System Integrated</div>
+    <div style={styles.container}>
+      {/* --- HEADER --- */}
+      <div style={styles.header}>
+        <div style={styles.profileRow}>
+          <div style={styles.dp}>T</div>
+          <div>
+            <div style={styles.userName}>Touqeer Iqbal Baghoor</div>
+            <div style={styles.status}>Umpire System Integrated</div>
           </div>
-          <button onClick={() => setView(isAdmin ? 'setup' : 'login')} style={s.topBtn}>+ Match</button>
+          {isAdmin && <button onClick={() => setView('setup')} style={styles.addBtn}>+ NEW MATCH</button>}
         </div>
-        <div style={s.tabs}>
-          <div onClick={() => setView('live')} style={view === 'live' ? s.tabAct : s.tab}>Live</div>
-          <div onClick={() => setView('history')} style={view === 'history' ? s.tabAct : s.tab}>History</div>
+        <div style={styles.nav}>
+          <div onClick={() => setView('live')} style={view === 'live' ? styles.navActive : styles.navItem}>LIVE</div>
+          <div onClick={() => setView('history')} style={view === 'history' ? styles.navActive : styles.navItem}>HISTORY</div>
+          {!isAdmin && <div onClick={() => setView('login')} style={styles.navItem}>ADMIN</div>}
         </div>
       </div>
 
-      {/* VIEW: LOGIN */}
+      {/* --- ANIMATION OVERLAY --- */}
+      {animation && <div style={styles.animOverlay}>{animation}</div>}
+
+      {/* --- LOGIN VIEW --- */}
       {view === 'login' && (
-        <div style={s.pad}>
-          <input type="password" placeholder="PIN: 6545" style={s.input} onChange={e => setPassInp(e.target.value)} />
-          <button onClick={() => passInp === ADMIN_PASS ? (setIsAdmin(true), setView('setup')) : alert("Wrong")} style={s.mainBtn}>ENTER SYSTEM</button>
+        <div style={styles.card}>
+          <h3>Admin Login</h3>
+          <input type="password" placeholder="Enter Code 6545" style={styles.input} onChange={e => setPassInput(e.target.value)} />
+          <button onClick={() => {
+            if(passInput === ADMIN_PASS) { setIsAdmin(true); localStorage.setItem('isCricketAdmin', 'true'); setView('live'); }
+            else alert("Ghalat Password!");
+          }} style={styles.btnGold}>LOGIN</button>
         </div>
       )}
 
-      {/* VIEW: SETUP */}
+      {/* --- SETUP VIEW --- */}
       {view === 'setup' && (
-        <form style={s.pad} onSubmit={(e: any) => {
+        <form style={styles.card} onSubmit={(e: any) => {
           e.preventDefault();
           const fd = new FormData(e.target);
-          const p = (v: any) => v.split('\n').map((l: any) => ({ name: l.split(',')[0], phone: l.split(',')[1], r: 0, b: 0, f4: 0, s6: 0, o: 0, w: 0 }));
+          const parse = (v: any) => v.split('\n').map((l: any) => ({ name: l.split(',')[0], phone: l.split(',')[1] || '923015800630' }));
           const data = {
-            umpire: fd.get('umpire'), time: fd.get('time'), ground: fd.get('ground'),
-            team1: { name: fd.get('t1'), players: p(fd.get('p1')) },
-            team2: { name: fd.get('t2'), players: p(fd.get('p2')) },
-            score: 0, wkts: 0, ovs: 0, balls: 0, freeHit: false, target: 0
+            league: fd.get('league'), ground: fd.get('ground'), umpire: fd.get('umpire'), time: fd.get('time'),
+            team1: { name: fd.get('t1'), players: parse(fd.get('p1')) },
+            team2: { name: fd.get('t2'), players: parse(fd.get('p2')) },
+            score: 0, wkts: 0, ovs: 0, balls: 0, target: fd.get('target'), totalOvers: fd.get('totalOvers')
           };
           set(ref(db, 'liveMatch'), data); setView('live');
         }}>
-          <input name="umpire" placeholder="Umpire Name" style={s.input} />
-          <input name="time" placeholder="Match Time (e.g 10:00 AM)" style={s.input} />
-          <input name="ground" placeholder="Ground Name" style={s.input} />
-          <input name="t1" placeholder="Team 1 Name" style={s.input} />
-          <textarea name="p1" placeholder="T1 Players (Name,92300... one per line)" style={s.area} />
-          <input name="t2" placeholder="Team 2 Name" style={s.input} />
-          <textarea name="p2" placeholder="T2 Players (Name,92300... one per line)" style={s.area} />
-          <button type="submit" style={s.mainBtn}>LAUNCH MATCH</button>
+          <input name="league" placeholder="League Name" style={styles.input} required />
+          <input name="umpire" placeholder="Umpire Name" style={styles.input} required />
+          <input name="ground" placeholder="Ground Name" style={styles.input} />
+          <input name="time" placeholder="Match Time (e.g. 2:00 PM)" style={styles.input} />
+          <input name="totalOvers" placeholder="Total Overs (e.g. 10)" style={styles.input} />
+          <input name="target" placeholder="Target (Optional)" style={styles.input} />
+          <input name="t1" placeholder="Batting Team Name" style={styles.input} />
+          <textarea name="p1" placeholder="Batsmen (Name,WhatsAppNumber)" style={styles.area} />
+          <input name="t2" placeholder="Bowling Team Name" style={styles.input} />
+          <textarea name="p2" placeholder="Bowlers (Name,WhatsAppNumber)" style={styles.area} />
+          <button type="submit" style={styles.btnGold}>START LIVE MATCH</button>
         </form>
       )}
 
-      {/* VIEW: LIVE */}
-      {view === 'live' && match && (
-        <div style={s.pad}>
-          {/* Animation Overlay */}
-          {anim && <div style={s.animPop}>{anim}</div>}
-
-          <div style={s.liveCard}>
-            <div style={s.meta}>{match.time} | {match.ground} | Umpire: {match.umpire}</div>
-            <div style={s.score}>{match.score}/{match.wkts} <small style={{ fontSize: '18px' }}>({match.ovs}.{match.balls})</small></div>
-            <div style={s.rrRow}>
-              <span>RR: {(match.score / (match.ovs + match.balls / 6 || 1)).toFixed(2)}</span>
-              {match.freeHit && <span style={s.freeHit}>FREE HIT</span>}
-            </div>
+      {/* --- LIVE VIEW --- */}
+      {view === 'live' && match ? (
+        <div style={styles.liveWrapper}>
+          <div style={styles.scoreCard}>
+            <div style={styles.matchMeta}>{match.league} | {match.time}</div>
+            <div style={styles.umpireText}>Umpire: {match.umpire}</div>
+            <div style={styles.mainScore}>{match.score}/{match.wkts} <span style={styles.overText}>({match.ovs}.{match.balls})</span></div>
+            <div style={styles.rrLine}>RR: {(match.score / (match.ovs + (match.balls/6) || 1)).toFixed(2)} | Target: {match.target || 'TBD'}</div>
+            {match.freeHit && <div style={styles.freeHitLabel}>FREE HIT!</div>}
           </div>
 
-          {/* Teams List (Clickable) */}
-          <div style={s.teamRow}>
-            <button onClick={() => setShowTeam(1)} style={s.tBtn}>{match.team1.name}</button>
-            <button onClick={() => setShowTeam(2)} style={s.tBtn}>{match.team2.name}</button>
+          <div style={styles.teamSelector}>
+            <button onClick={() => setActiveTeamView(1)} style={styles.teamBtn}>{match.team1.name} (Players)</button>
+            <button onClick={() => setActiveTeamView(2)} style={styles.teamBtn}>{match.team2.name} (Players)</button>
           </div>
 
-          {showTeam && (
-            <div style={s.playerList}>
-              <div style={s.listHead}>Players List - {showTeam === 1 ? match.team1.name : match.team2.name}</div>
-              {(showTeam === 1 ? match.team1.players : match.team2.players).map((p: any, i: number) => (
-                <div key={i} style={s.pItem}>
+          {activeTeamView && (
+            <div style={styles.modal}>
+              <h4>{activeTeamView === 1 ? match.team1.name : match.team2.name} List</h4>
+              {(activeTeamView === 1 ? match.team1.players : match.team2.players).map((p: any, i: number) => (
+                <div key={i} style={styles.playerRow}>
                   <span>{p.name}</span>
-                  <div style={s.row}>
-                    {isAdmin && (
-                      <button onClick={() => {
-                        let m = { ...match };
-                        if (showTeam === 1) m.striker = p; else m.bowler = p;
-                        set(ref(db, 'liveMatch'), m); setShowTeam(null);
-                      }} style={s.selBtn}>Select</button>
-                    )}
-                    <span onClick={() => sendWhatsApp(p)} style={s.waIco}>📞</span>
+                  <div style={{display:'flex', gap: '10px'}}>
+                    {isAdmin && <button onClick={() => {
+                      let m = {...match};
+                      if(activeTeamView === 1) m.striker = p; else m.bowler = p;
+                      set(ref(db, 'liveMatch'), m); setActiveTeamView(null);
+                    }} style={styles.selBtn}>Select</button>}
+                    <span onClick={() => sendWhatsAppUpdate(p)} style={styles.waIcon}>📞</span>
                   </div>
                 </div>
               ))}
-              <button onClick={() => setShowTeam(null)} style={s.clsBtn}>Close</button>
+              <button onClick={() => setActiveTeamView(null)} style={styles.closeBtn}>Close</button>
             </div>
           )}
 
-          {/* Striker/Bowler Stats */}
-          <div style={s.statsGrid}>
-            <div style={s.statBox}>
-              <div style={s.statLabel}>Batsman (Striker)</div>
-              <div style={s.statVal}>{match.striker?.name || '---'}</div>
-              <div style={s.statSub}>{match.striker?.r || 0}({match.striker?.b || 0}) | 4s: {match.striker?.f4 || 0} 6s: {match.striker?.s6 || 0}</div>
+          <div style={styles.statsGrid}>
+            <div style={styles.statBox}>
+              <div style={styles.label}>STRIKER</div>
+              <div style={styles.val}>{match.striker?.name || '---'}</div>
             </div>
-            <div style={s.statBox}>
-              <div style={s.statLabel}>Bowler</div>
-              <div style={s.statVal}>{match.bowler?.name || '---'}</div>
-              <div style={s.statSub}>Ovs: {match.bowler?.o || 0} | Runs: {match.bowler?.r || 0}</div>
+            <div style={styles.statBox}>
+              <div style={styles.label}>BOWLER</div>
+              <div style={styles.val}>{match.bowler?.name || '---'}</div>
             </div>
           </div>
 
-          {/* ADMIN CONTROLS */}
           {isAdmin && (
-            <div style={s.ctrls}>
-              {[0, 1, 2, 3, 4, 6].map(n => <button key={n} onClick={() => handleScore(n)} style={s.num}>{n}</button>)}
-              <button onClick={() => handleScore(0, "WD")} style={s.ex}>WD</button>
-              <button onClick={() => handleScore(0, "NB")} style={s.ex}>NB</button>
-              <button onClick={() => handleScore(0, "W")} style={s.wkt}>WICKET</button>
-              <button onClick={saveToHistory} style={s.save}>SAVE MATCH HISTORY</button>
+            <div style={styles.controls}>
+              {[0, 1, 2, 3, 4, 6].map(n => <button key={n} onClick={() => handleScore(n)} style={styles.numBtn}>{n}</button>)}
+              <button onClick={() => handleScore(0, "WD")} style={styles.exBtn}>WD</button>
+              <button onClick={() => handleScore(0, "NB")} style={styles.exBtn}>NB</button>
+              <button onClick={() => handleScore(0, "W")} style={styles.wktBtn}>WICKET OUT</button>
+              <button onClick={() => {
+                push(ref(db, 'history'), {...match, date: new Date().toLocaleString()});
+                remove(ref(db, 'liveMatch'));
+              }} style={styles.endBtn}>FINISH & SAVE HISTORY</button>
             </div>
           )}
         </div>
+      ) : (
+        view === 'live' && <div style={{textAlign:'center', marginTop:'50px'}}>Koi Match Live Nahi Hai.</div>
       )}
 
-      {/* VIEW: HISTORY */}
+      {/* --- HISTORY VIEW --- */}
       {view === 'history' && (
-        <div style={s.pad}>
+        <div style={styles.pad}>
           {history.map((h) => (
-            <div key={h.id} style={s.histItem}>
-              <div>{h.team1.name} vs {h.team2.name}</div>
-              <div style={s.histScore}>{h.score}/{h.wkts} ({h.date})</div>
-              {isAdmin && <button onClick={() => remove(ref(db, `history/${h.id}`))} style={s.del}>Delete</button>}
+            <div key={h.id} style={styles.histCard}>
+              <div style={{fontWeight:'bold'}}>{h.team1.name} vs {h.team2.name}</div>
+              <div style={{color:'#facc15'}}>{h.score}/{h.wkts} ({h.date})</div>
+              {isAdmin && <button onClick={() => remove(ref(db, `history/${h.id}`))} style={styles.delBtn}>Delete</button>}
             </div>
           ))}
         </div>
@@ -225,46 +216,42 @@ export default function IntelligentCricketApp() {
   );
 }
 
-const s: any = {
-  app: { background: '#0a0f1e', minHeight: '100vh', color: 'white', fontFamily: 'sans-serif' },
+const styles: any = {
+  container: { background: '#0a0e1a', minHeight: '100vh', color: '#fff', fontFamily: 'Arial' },
   header: { background: '#161d31', padding: '15px', borderBottom: '2px solid #facc15' },
-  row: { display: 'flex', alignItems: 'center', gap: '10px' },
-  avatar: { width: '40px', height: '40px', background: '#facc15', borderRadius: '50%', color: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold' },
-  hName: { fontWeight: 'bold', fontSize: '14px', color: '#facc15' },
-  hSub: { fontSize: '10px', color: '#22c55e' },
-  topBtn: { background: '#facc15', border: 'none', padding: '5px 12px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' },
-  tabs: { display: 'flex', marginTop: '15px', gap: '5px' },
-  tab: { flex: 1, textAlign: 'center', padding: '8px', background: '#242b3d', borderRadius: '5px', fontSize: '12px' },
-  tabAct: { flex: 1, textAlign: 'center', padding: '8px', background: '#facc15', color: '#000', borderRadius: '5px', fontSize: '12px', fontWeight: 'bold' },
-  pad: { padding: '20px' },
-  liveCard: { background: '#161d31', padding: '20px', borderRadius: '15px', textAlign: 'center', borderTop: '4px solid #facc15', position: 'relative' },
-  score: { fontSize: '45px', fontWeight: '900', margin: '10px 0' },
-  meta: { fontSize: '11px', color: '#64748b', textTransform: 'uppercase' },
-  rrRow: { display: 'flex', justifyContent: 'center', gap: '15px', color: '#facc15', fontWeight: 'bold' },
-  freeHit: { color: '#ef4444', animation: 'blink 1s infinite' },
-  teamRow: { display: 'flex', gap: '10px', marginTop: '20px' },
-  tBtn: { flex: 1, padding: '12px', background: '#242b3d', border: '1px solid #334155', color: '#fff', borderRadius: '10px' },
-  playerList: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 100, padding: '30px' },
-  listHead: { fontSize: '18px', fontWeight: 'bold', color: '#facc15', marginBottom: '20px' },
-  pItem: { display: 'flex', justifyContent: 'space-between', padding: '15px 0', borderBottom: '1px solid #334155' },
-  waIco: { background: '#22c55e', padding: '5px 10px', borderRadius: '50px', fontSize: '12px' },
-  selBtn: { background: '#facc15', color: '#000', border: 'none', borderRadius: '4px', padding: '2px 8px', marginRight: '10px' },
-  clsBtn: { width: '100%', padding: '15px', background: '#ef4444', border: 'none', color: '#fff', marginTop: '20px', borderRadius: '10px' },
-  statsGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '20px' },
-  statBox: { background: '#161d31', padding: '15px', borderRadius: '10px', border: '1px solid #334155' },
-  statLabel: { fontSize: '10px', color: '#64748b' },
-  statVal: { fontWeight: 'bold', color: '#facc15' },
-  statSub: { fontSize: '10px', marginTop: '5px' },
-  ctrls: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '20px' },
-  num: { padding: '15px', background: '#fff', color: '#000', border: 'none', borderRadius: '8px', fontWeight: 'bold' },
-  ex: { background: '#facc15', color: '#000', border: 'none', borderRadius: '8px', fontWeight: 'bold' },
-  wkt: { gridColumn: 'span 4', background: '#ef4444', color: '#fff', padding: '15px', border: 'none', borderRadius: '8px', fontWeight: 'bold' },
-  save: { gridColumn: 'span 4', background: '#334155', color: '#fff', padding: '12px', border: 'none', borderRadius: '8px', fontSize: '12px', marginTop: '10px' },
-  animPop: { position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#facc15', color: '#000', padding: '20px 40px', borderRadius: '50px', fontWeight: '900', fontSize: '30px', zIndex: 200, boxShadow: '0 0 50px #facc15' },
-  input: { width: '100%', padding: '12px', marginBottom: '10px', background: '#161d31', border: '1px solid #334155', color: '#fff', borderRadius: '8px' },
-  area: { width: '100%', padding: '12px', background: '#161d31', border: '1px solid #334155', color: '#fff', borderRadius: '8px', height: '80px' },
-  mainBtn: { width: '100%', padding: '15px', background: '#facc15', border: 'none', fontWeight: 'bold', borderRadius: '8px' },
-  histItem: { background: '#161d31', padding: '15px', borderRadius: '10px', marginBottom: '10px' },
-  histScore: { color: '#facc15', fontSize: '12px' },
-  del: { background: '#ef4444', border: 'none', color: '#fff', padding: '4px 8px', fontSize: '10px', borderRadius: '4px', marginTop: '5px' }
+  profileRow: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '15px' },
+  dp: { width: '40px', height: '40px', background: '#facc15', borderRadius: '50%', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
+  userName: { fontSize: '14px', fontWeight: 'bold', color: '#facc15' },
+  status: { fontSize: '10px', color: '#22c55e' },
+  addBtn: { marginLeft: 'auto', background: '#facc15', border: 'none', padding: '6px 12px', borderRadius: '5px', fontWeight: 'bold' },
+  nav: { display: 'flex', gap: '10px' },
+  navItem: { flex: 1, textAlign: 'center', padding: '8px', background: '#242b3d', borderRadius: '6px', fontSize: '12px' },
+  navActive: { flex: 1, textAlign: 'center', padding: '8px', background: '#facc15', color: '#000', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold' },
+  animOverlay: { position: 'fixed', top: '40%', left: '50%', transform: 'translate(-50%, -50%)', background: '#facc15', color: '#000', padding: '30px 60px', borderRadius: '100px', fontSize: '40px', fontWeight: '900', zIndex: 1000, boxShadow: '0 0 100px #facc15' },
+  card: { margin: '20px', padding: '20px', background: '#161d31', borderRadius: '12px' },
+  input: { width: '100%', padding: '12px', marginBottom: '10px', background: '#0a0e1a', border: '1px solid #334155', color: '#fff', borderRadius: '8px' },
+  area: { width: '100%', height: '80px', padding: '12px', marginBottom: '10px', background: '#0a0e1a', border: '1px solid #334155', color: '#fff', borderRadius: '8px' },
+  btnGold: { width: '100%', padding: '15px', background: '#facc15', border: 'none', fontWeight: 'bold', borderRadius: '8px', cursor: 'pointer' },
+  liveWrapper: { padding: '15px' },
+  scoreCard: { background: 'linear-gradient(135deg, #161d31 0%, #242b3d 100%)', padding: '25px', borderRadius: '20px', textAlign: 'center', borderTop: '5px solid #facc15' },
+  mainScore: { fontSize: '50px', fontWeight: '900', margin: '15px 0' },
+  overText: { fontSize: '20px', color: '#94a3b8' },
+  umpireText: { color: '#facc15', fontSize: '14px', fontWeight: 'bold' },
+  freeHitLabel: { color: '#ef4444', fontWeight: 'bold', fontSize: '20px', animation: 'blink 1s infinite' },
+  teamSelector: { display: 'flex', gap: '10px', marginTop: '20px' },
+  teamBtn: { flex: 1, padding: '12px', background: '#161d31', border: '1px solid #facc15', color: '#fff', borderRadius: '10px' },
+  modal: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', padding: '40px', zIndex: 500 },
+  playerRow: { display: 'flex', justifyContent: 'space-between', padding: '15px', borderBottom: '1px solid #334155' },
+  waIcon: { background: '#22c55e', padding: '5px 10px', borderRadius: '50px', fontSize: '12px' },
+  controls: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginTop: '25px' },
+  numBtn: { padding: '15px', background: '#fff', color: '#000', border: 'none', borderRadius: '10px', fontWeight: 'bold', fontSize: '18px' },
+  exBtn: { background: '#facc15', color: '#000', border: 'none', borderRadius: '10px', fontWeight: 'bold' },
+  wktBtn: { gridColumn: 'span 4', background: '#ef4444', color: '#fff', padding: '15px', border: 'none', borderRadius: '10px', fontWeight: 'bold' },
+  endBtn: { gridColumn: 'span 4', background: '#334155', color: '#fff', padding: '12px', border: 'none', borderRadius: '10px', marginTop: '10px' },
+  statsGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '15px' },
+  statBox: { background: '#161d31', padding: '15px', borderRadius: '12px' },
+  label: { fontSize: '10px', color: '#64748b' },
+  val: { fontWeight: 'bold', color: '#facc15' },
+  histCard: { background: '#161d31', padding: '15px', borderRadius: '10px', marginBottom: '10px' },
+  delBtn: { background: '#ef4444', border: 'none', color: '#fff', padding: '5px 10px', borderRadius: '4px', marginTop: '5px', fontSize: '10px' }
 };
