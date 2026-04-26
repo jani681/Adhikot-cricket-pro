@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps } from "firebase/app";
 import { getDatabase, ref, set, onValue, remove } from "firebase/database";
 
+// Firebase Configuration
 const firebaseConfig = {
   apiKey: "AIzaSyB0e37uvyY7Jpuj-FYxDlX52hjb0uwsBfg",
   databaseURL: "https://adhikot-cricket-pro-default-rtdb.firebaseio.com"
@@ -10,34 +11,30 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getDatabase(app);
 
-export default function AdhikotOriginal1122() {
+export default function AdhikotProV2() {
   const [match, setMatch] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [view, setView] = useState('live'); 
   const adminNumber = "00923015800630";
 
   useEffect(() => {
-    return onValue(ref(db, 'liveMatch'), (snapshot) => {
+    const matchRef = ref(db, 'liveMatch');
+    return onValue(matchRef, (snapshot) => {
       setMatch(snapshot.val());
     });
   }, []);
 
-  const handleCreateMatch = (e) => {
+  const startMatch = (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const setup = {
-      league: fd.get('league'),
-      overs: fd.get('overs'),
       t1: fd.get('t1'),
       t2: fd.get('t2'),
+      overs: fd.get('overs'),
       umpire: fd.get('umpire'),
       score: 0, wkts: 0, ov: 0, bl: 0,
-      striker: "Batsman 1", nonStriker: "Batsman 2",
-      bowler: "Bowler 1",
-      status: "1st Innings"
+      status: "LIVE"
     };
     set(ref(db, 'liveMatch'), setup);
-    setView('live');
   };
 
   const updateScore = (runs, type = "N") => {
@@ -46,9 +43,11 @@ export default function AdhikotOriginal1122() {
     if (type === "WD" || type === "NB") {
       m.score += (runs + 1);
     } else if (type === "W") {
-      m.wkts += 1; m.bl += 1;
+      m.wkts += 1;
+      m.bl += 1;
     } else {
-      m.score += runs; m.bl += 1;
+      m.score += runs;
+      m.bl += 1;
     }
     if (m.bl === 6) { m.ov += 1; m.bl = 0; }
     set(ref(db, 'liveMatch'), m);
@@ -56,93 +55,88 @@ export default function AdhikotOriginal1122() {
 
   return (
     <div style={s.container}>
-      {/* Permanent Admin Branding */}
+      {/* Header with Admin Branding */}
       <div style={s.header}>
         <div style={s.adminInfo}>
           <div style={s.avatar}>T</div>
           <div>
             <div style={s.adminName}>Touqeer Iqbal Baghoor</div>
-            <div style={s.waLive}>WhatsApp: {adminNumber}</div>
+            <div style={s.tagline}>Umpire System Integrated</div>
           </div>
         </div>
-        {!match && <button onClick={() => setView('setup')} style={s.plusBtn}>+ Match</button>}
-      </div>
-
-      {/* Login Field for 1122 */}
-      {!isAdmin && (
-        <div style={s.loginBar}>
+        {!isAdmin && (
           <input 
             type="password" 
             placeholder="PIN" 
-            onChange={(e) => e.target.value === "1122" && setIsAdmin(true)} 
-            style={s.pinInput} 
+            onChange={(e) => e.target.value === "1122" && setIsAdmin(true)}
+            style={s.passInput}
           />
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Setup View */}
-      {view === 'setup' && isAdmin && !match && (
-        <form onSubmit={handleCreateMatch} style={s.card}>
-          <h3 style={{color:'#facc15'}}>New Match Setup</h3>
-          <input name="league" placeholder="League Name" style={s.input} />
-          <input name="overs" placeholder="Total Overs" type="number" style={s.input} />
-          <input name="t1" placeholder="Batting Team" style={s.input} />
-          <input name="t2" placeholder="Bowling Team" style={s.input} />
-          <input name="umpire" placeholder="Umpire Name" style={s.input} />
-          <button type="submit" style={s.startBtn}>START LIVE</button>
-        </form>
-      )}
-
-      {/* Live Dashboard */}
-      {match && (
-        <div style={s.liveArea}>
-          <div style={s.scoreCard}>
-            <div style={s.leagueName}>{match.league}</div>
-            <div style={s.teams}>{match.t1} vs {match.t2}</div>
+      {!match ? (
+        isAdmin ? (
+          <form onSubmit={startMatch} style={s.card}>
+            <h3 style={{color: '#facc15', marginTop: 0}}>Match Setup</h3>
+            <input name="t1" placeholder="Batting Team" style={s.input} required />
+            <input name="t2" placeholder="Bowling Team" style={s.input} required />
+            <input name="overs" placeholder="Total Overs" type="number" style={s.input} required />
+            <input name="umpire" placeholder="Umpire Name" style={s.input} />
+            <button type="submit" style={s.startBtn}>START LIVE</button>
+          </form>
+        ) : (
+          <div style={s.noMatch}>Intezar Karein... Match Shuru Nahi Hua.</div>
+        )
+      ) : (
+        <div style={s.liveDashboard}>
+          <div style={s.mainScoreCard}>
+            <div style={s.matchMeta}>Umpire: {match.umpire} | {match.t1} vs {match.t2}</div>
             <div style={s.bigScore}>{match.score}/{match.wkts}</div>
-            <div style={s.overs}>Overs: {match.ov}.{match.bl} / {match.overs}</div>
-            <div style={s.umpire}>Umpire: {match.umpire}</div>
+            <div style={s.oversDisplay}>Overs: {match.ov}.{match.bl} / {match.overs}</div>
           </div>
 
           {isAdmin && (
-            <div style={s.controls}>
-              <div style={s.grid}>
-                {[0,1,2,3,4,6].map(n => <button key={n} onClick={() => updateScore(n)} style={s.btn}>{n}</button>)}
-                <button onClick={() => updateScore(0, "WD")} style={s.extra}>WD</button>
-                <button onClick={() => updateScore(0, "NB")} style={s.extra}>NB</button>
-                <button onClick={() => updateScore(0, "W")} style={s.wkt}>WKT</button>
+            <div style={s.adminControls}>
+              <div style={s.buttonGrid}>
+                {[0, 1, 2, 3, 4, 6].map(n => (
+                  <button key={n} onClick={() => updateScore(n)} style={s.runBtn}>{n}</button>
+                ))}
+                <button onClick={() => updateScore(0, "WD")} style={s.extraBtn}>WD</button>
+                <button onClick={() => updateScore(0, "NB")} style={s.extraBtn}>NB</button>
+                <button onClick={() => updateScore(0, "W")} style={s.wktBtn}>WKT</button>
               </div>
-              <button onClick={() => remove(ref(db, 'liveMatch'))} style={s.delBtn}>Finish Match</button>
+              <button onClick={() => remove(ref(db, 'liveMatch'))} style={s.resetBtn}>End Match</button>
             </div>
           )}
+          
+          <div style={s.footerWa}>WhatsApp Updates: {adminNumber}</div>
         </div>
       )}
-
-      {!match && view === 'live' && <div style={s.empty}>Wait for Match to Start...</div>}
     </div>
   );
 }
 
 const s = {
-  container: { background: '#050a18', minHeight: '100vh', padding: '15px', color: 'white', fontFamily: 'sans-serif' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#111827', padding: '10px', borderRadius: '12px', borderBottom: '2px solid #facc15' },
+  container: { background: '#0a0f1d', minHeight: '100vh', color: 'white', padding: '15px', fontFamily: 'sans-serif' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#161d31', padding: '10px', borderRadius: '12px', borderBottom: '2px solid #facc15', marginBottom: '20px' },
   adminInfo: { display: 'flex', alignItems: 'center', gap: '10px' },
-  avatar: { width: '40px', height: '40px', background: '#facc15', color: 'black', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
+  avatar: { width: '35px', height: '35px', background: '#facc15', color: 'black', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
   adminName: { fontSize: '14px', fontWeight: 'bold' },
-  waLive: { fontSize: '10px', color: '#22c55e' },
-  loginBar: { textAlign: 'right', marginTop: '10px' },
-  pinInput: { background: 'transparent', border: '1px solid #374151', color: 'white', width: '50px', textAlign: 'center', borderRadius: '5px' },
-  card: { background: '#111827', padding: '20px', borderRadius: '15px', marginTop: '20px' },
-  input: { width: '100%', padding: '12px', marginBottom: '10px', background: '#1f2937', border: 'none', color: 'white', borderRadius: '8px' },
+  tagline: { fontSize: '10px', color: '#22c55e' },
+  passInput: { width: '50px', background: 'transparent', border: '1px solid #334155', color: 'white', textAlign: 'center', borderRadius: '4px' },
+  card: { background: '#161d31', padding: '20px', borderRadius: '15px', border: '1px solid #1e293b' },
+  input: { width: '100%', padding: '12px', marginBottom: '10px', background: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '8px', boxSizing: 'border-box' },
   startBtn: { width: '100%', padding: '15px', background: '#facc15', color: 'black', border: 'none', borderRadius: '8px', fontWeight: 'bold' },
-  scoreCard: { background: 'linear-gradient(to bottom, #1e293b, #0f172a)', padding: '30px', borderRadius: '20px', textAlign: 'center', marginTop: '20px' },
-  bigScore: { fontSize: '60px', fontWeight: 'bold', color: '#facc15' },
-  controls: { marginTop: '20px', background: '#111827', padding: '15px', borderRadius: '15px' },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' },
-  btn: { padding: '15px', background: 'white', color: 'black', borderRadius: '8px', border: 'none', fontWeight: 'bold' },
-  extra: { padding: '15px', background: '#facc15', color: 'black', borderRadius: '8px', border: 'none', fontWeight: 'bold' },
-  wkt: { padding: '15px', background: '#ef4444', color: 'white', borderRadius: '8px', border: 'none', fontWeight: 'bold' },
-  delBtn: { width: '100%', padding: '10px', marginTop: '15px', background: '#374151', color: 'white', border: 'none', borderRadius: '8px' },
-  plusBtn: { background: '#facc15', color: 'black', border: 'none', padding: '5px 15px', borderRadius: '8px', fontWeight: 'bold' },
-  empty: { textAlign: 'center', marginTop: '100px', opacity: 0.5 }
+  mainScoreCard: { background: 'linear-gradient(180deg, #1e293b, #0f172a)', padding: '30px', borderRadius: '20px', textAlign: 'center', border: '1px solid #1e293b' },
+  bigScore: { fontSize: '65px', fontWeight: 'bold', color: '#facc15', margin: '10px 0' },
+  matchMeta: { fontSize: '14px', opacity: 0.7, marginBottom: '5px' },
+  oversDisplay: { fontSize: '20px' },
+  adminControls: { marginTop: '20px', background: '#161d31', padding: '15px', borderRadius: '15px' },
+  buttonGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' },
+  runBtn: { padding: '18px', background: 'white', color: 'black', border: 'none', borderRadius: '10px', fontWeight: 'bold', fontSize: '18px' },
+  extraBtn: { padding: '18px', background: '#facc15', color: 'black', border: 'none', borderRadius: '10px', fontWeight: 'bold' },
+  wktBtn: { padding: '18px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 'bold' },
+  resetBtn: { width: '100%', padding: '12px', marginTop: '15px', background: '#334155', color: 'white', border: 'none', borderRadius: '10px' },
+  footerWa: { textAlign: 'center', marginTop: '20px', fontSize: '12px', opacity: 0.5 },
+  noMatch: { textAlign: 'center', marginTop: '100px', fontSize: '18px', opacity: 0.5 }
 };
