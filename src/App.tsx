@@ -10,91 +10,156 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getDatabase(app);
 
-export default function AdhikotCricketPro() {
+export default function AdhikotProV3() {
   const [match, setMatch] = useState<any>(null);
-  const [view, setView] = useState('live');
   const [isAdmin, setIsAdmin] = useState(false);
-  const [anim, setAnim] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState('live'); // live, scorecard, admin
 
   useEffect(() => {
     const matchRef = ref(db, 'liveMatch');
-    const unsub = onValue(matchRef, (snap) => {
-      setMatch(snap.val());
-      setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
+    return onValue(matchRef, (snap) => setMatch(snap.val()));
   }, []);
 
-  const trigger = (txt: string) => {
-    setAnim(txt);
-    setTimeout(() => setAnim(""), 2500);
-  };
+  const updateDB = (newData: any) => set(ref(db, 'liveMatch'), newData);
 
-  const handleScore = (runs: number, type = "reg") => {
-    if (!isAdmin || !match) return;
-    let m = { ...match };
+  const handleBall = (runs: number, isWicket = false, isExtra = false, extraType = "") => {
+    if (!match || !isAdmin) return;
+    let m = JSON.parse(JSON.stringify(match));
     
-    // Safety check for numbers
-    m.score = (m.score || 0);
-    m.wkts = (m.wkts || 0);
-    m.ovs = (m.ovs || 0);
-    m.balls = (m.balls || 0);
-
-    if (type === "W") {
-      m.wkts += 1; m.balls += 1; trigger("OUT! ☝️");
-    } else if (type === "WD" || type === "NB") {
-      m.score += (runs + 1); trigger(type === "WD" ? "WIDE" : "NO BALL");
+    // 1. Basic Score Update
+    if (!isExtra) {
+      m.score += runs;
+      m.balls += 1;
+      // Update Batsman Stats
+      if (m.striker) {
+        m.striker.r += runs;
+        m.striker.b += 1;
+        if (runs === 4) m.striker.f4 += 1;
+        if (runs === 6) m.striker.s6 += 1;
+      }
+      // Strike Rotation
+      if (runs % 2 !== 0) {
+        const temp = m.striker;
+        m.striker = m.nonStriker;
+        m.nonStriker = temp;
+      }
     } else {
-      m.score += runs; m.balls += 1;
-      if (runs === 4) trigger("FOUR! 🏏");
-      if (runs === 6) trigger("SIX! 🚀");
+      m.score += (runs + 1); // Wide/NB logic
+      if (extraType === "NB") {
+          m.freeHit = true;
+          if(m.striker) { m.striker.r += runs; m.striker.b += 1; }
+      }
     }
 
-    if (m.balls >= 6) { m.ovs += 1; m.balls = 0; }
-    set(ref(db, 'liveMatch'), m);
+    // 2. Wicket Logic
+    if (isWicket) {
+      m.wkts += 1;
+      m.balls += 1;
+      m.striker = null; // Forces Admin to select new player
+    }
+
+    // 3. Over Completion
+    if (m.balls >= 6) {
+      m.ovs += 1;
+      m.balls = 0;
+      // Over change rotation
+      const temp = m.striker;
+      m.striker = m.nonStriker;
+      m.nonStriker = temp;
+      m.currentBowler = null; // New bowler required
+    }
+
+    updateDB(m);
   };
 
-  if (loading) return <div style={{background:'#020617', color:'#facc15', height:'100vh', display:'flex', alignItems:'center', justifyContent:'center'}}>Connecting to Database...</div>;
+  if (!match) return <div style={s.loader}>No Active Match | Waiting for Touqeer...</div>;
 
   return (
-    <div style={{background: '#020617', minHeight: '100vh', color: '#fff', fontFamily: 'sans-serif'}}>
-      {/* Header */}
-      <div style={{padding: '15px', background: '#0f172a', borderBottom: '2px solid #facc15', display: 'flex', justifyContent: 'space-between'}}>
-        <b>Touqeer Iqbal | Adhikot Pro</b>
-        <button onClick={() => {
-            const p = prompt("Enter Admin PIN:");
-            if(p === "6545") setIsAdmin(true);
-        }} style={{background: isAdmin ? '#22c55e' : '#334155', color: '#fff', border: 'none', borderRadius: '5px', padding: '5px 10px'}}>
-            {isAdmin ? "Admin: ON" : "Admin: OFF"}
+    <div style={s.container}>
+      {/* Header Profile */}
+      <div style={s.header}>
+        <div style={s.profile}>
+          <div style={s.avatar}>T</div>
+          <div>
+            <div style={s.uName}>Touqeer Iqbal Baghoor</div>
+            <div style={s.uRole}>Umpire System Integrated</div>
+          </div>
+        </div>
+        <button onClick={() => setIsAdmin(!isAdmin)} style={isAdmin ? s.adminOn : s.adminOff}>
+          {isAdmin ? "Admin: ON" : "Lock Admin"}
         </button>
       </div>
 
-      {anim && <div style={{position: 'fixed', top: '40%', left: '50%', transform: 'translate(-50%,-50%)', background: '#facc15', color: '#000', padding: '30px 50px', borderRadius: '100px', fontSize: '40px', fontWeight: 'bold', zIndex: 1000}}>{anim}</div>}
+      {/* Main Scoreboard */}
+      <div style={s.scoreCard}>
+        <div style={s.meta}>{match.league} • {match.ground}</div>
+        <div style={s.bigScore}>{match.score}/{match.wkts}</div>
+        <div style={s.overs}>({match.ovs}.{match.balls})</div>
+        <div style={s.rr}>CRR: {(match.score / (match.ovs + match.balls/6 || 1)).toFixed(2)}</div>
+      </div>
 
-      {!match ? (
-        <div style={{textAlign: 'center', marginTop: '100px'}}>
-          <p>No Live Match Found.</p>
-          {isAdmin && <button onClick={() => set(ref(db, 'liveMatch'), { league: "Adhi Kot Premium", score: 0, wkts: 0, ovs: 0, balls: 0, umpire: "Touqeer", team1: {name: "Team A"}, team2: {name: "Team B" }})} style={{padding: '10px 20px', background: '#facc15', border: 'none', borderRadius: '8px'}}>Start Demo Match</button>}
+      {/* Batsmen Display */}
+      <div style={s.playerGrid}>
+        <div style={s.playerBox} onClick={() => isAdmin && setStriker(m)}>
+          <div style={s.pName}>{match.striker?.name || "Select Striker"} *</div>
+          <div style={s.pStats}>{match.striker?.r || 0}({match.striker?.b || 0})</div>
         </div>
-      ) : (
-        <div style={{padding: '20px'}}>
-          <div style={{background: 'linear-gradient(to bottom, #1e293b, #020617)', padding: '30px', borderRadius: '20px', textAlign: 'center', border: '1px solid #334155'}}>
-            <h1 style={{fontSize: '60px', color: '#facc15', margin: '0'}}>{match?.score || 0}/{match?.wkts || 0}</h1>
-            <h2 style={{margin: '5px 0'}}>({match?.ovs || 0}.{match?.balls || 0})</h2>
-            <p>Empire: {match?.umpire || "N/A"}</p>
-          </div>
+        <div style={s.playerBox}>
+          <div style={s.pName}>{match.nonStriker?.name || "Select Non-Striker"}</div>
+          <div style={s.pStats}>{match.nonStriker?.r || 0}({match.nonStriker?.b || 0})</div>
+        </div>
+      </div>
 
-          {isAdmin && (
-            <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginTop: '30px'}}>
-              {[0,1,2,3,4,6].map(n => <button key={n} onClick={() => handleScore(n)} style={{padding: '20px', fontSize: '20px', fontWeight: 'bold', borderRadius: '10px', border: 'none'}}>{n}</button>)}
-              <button onClick={() => handleScore(0, "WD")} style={{padding: '20px', background: '#facc15', borderRadius: '10px', border: 'none'}}>WD</button>
-              <button onClick={() => handleScore(0, "NB")} style={{padding: '20px', background: '#facc15', borderRadius: '10px', border: 'none'}}>NB</button>
-              <button onClick={() => handleScore(0, "W")} style={{padding: '20px', background: '#ef4444', color: '#fff', borderRadius: '10px', border: 'none'}}>WKT</button>
-            </div>
-          )}
+      {/* Admin Controls */}
+      {isAdmin && (
+        <div style={s.controls}>
+          <div style={s.btnRow}>
+            {[0, 1, 2, 3, 4, 6].map(r => (
+              <button key={r} onClick={() => handleBall(r)} style={s.ballBtn}>{r}</button>
+            ))}
+          </div>
+          <div style={s.btnRow}>
+            <button onClick={() => handleBall(0, false, true, "WD")} style={s.extraBtn}>WD</button>
+            <button onClick={() => handleBall(0, false, true, "NB")} style={s.extraBtn}>NB</button>
+            <button onClick={() => handleBall(0, true)} style={s.wktBtn}>WICKET</button>
+          </div>
         </div>
       )}
+
+      {/* View Tabs */}
+      <div style={s.tabs}>
+        <button onClick={() => setView('live')} style={view === 'live' ? s.tabA : s.tab}>LIVE</button>
+        <button onClick={() => setView('scorecard')} style={view === 'scorecard' ? s.tabA : s.tab}>SCORECARD</button>
+        <button onClick={() => setView('history')} style={view === 'history' ? s.tabA : s.tab}>HISTORY</button>
+      </div>
     </div>
   );
 }
+
+const s: any = {
+  container: { background: '#0a0e1a', minHeight: '100vh', color: '#fff', padding: '10px' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', borderBottom: '1px solid #1e293b' },
+  profile: { display: 'flex', alignItems: 'center', gap: '10px' },
+  avatar: { width: '35px', height: '35px', background: '#facc15', borderRadius: '50%', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
+  uName: { fontSize: '13px', fontWeight: 'bold' },
+  uRole: { fontSize: '10px', color: '#22c55e' },
+  adminOn: { background: '#22c55e', color: '#fff', border: 'none', borderRadius: '5px', padding: '5px 12px', fontSize: '11px' },
+  adminOff: { background: '#334155', color: '#fff', border: 'none', borderRadius: '5px', padding: '5px 12px', fontSize: '11px' },
+  scoreCard: { background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', margin: '15px 0', padding: '25px', borderRadius: '15px', textAlign: 'center', border: '1px solid #334155' },
+  bigScore: { fontSize: '55px', fontWeight: 'bold', color: '#facc15' },
+  overs: { fontSize: '20px', color: '#94a3b8' },
+  rr: { marginTop: '10px', fontWeight: 'bold', color: '#facc15' },
+  playerGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' },
+  playerBox: { background: '#161e2e', padding: '15px', borderRadius: '10px', border: '1px solid #334155' },
+  pName: { fontSize: '12px', color: '#94a3b8' },
+  pStats: { fontSize: '18px', fontWeight: 'bold' },
+  controls: { marginTop: '20px' },
+  btnRow: { display: 'flex', gap: '8px', marginBottom: '8px' },
+  ballBtn: { flex: 1, padding: '15px', background: '#fff', color: '#000', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '18px' },
+  extraBtn: { flex: 1, padding: '12px', background: '#facc15', color: '#000', border: 'none', borderRadius: '8px', fontWeight: 'bold' },
+  wktBtn: { flex: 2, padding: '12px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold' },
+  tabs: { display: 'flex', position: 'fixed', bottom: 0, left: 0, right: 0, background: '#0f172a', padding: '10px' },
+  tab: { flex: 1, background: 'none', border: 'none', color: '#94a3b8', fontSize: '12px' },
+  tabA: { flex: 1, background: 'none', border: 'none', color: '#facc15', fontWeight: 'bold', fontSize: '12px' },
+  loader: { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0e1a', color: '#facc15' }
+};
