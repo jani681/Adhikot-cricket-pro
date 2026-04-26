@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps } from "firebase/app";
 import { getDatabase, ref, set, onValue, remove } from "firebase/database";
 
-// Firebase Configuration
 const firebaseConfig = {
   apiKey: "AIzaSyB0e37uvyY7Jpuj-FYxDlX52hjb0uwsBfg",
   databaseURL: "https://adhikot-cricket-pro-default-rtdb.firebaseio.com"
@@ -11,213 +10,139 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getDatabase(app);
 
-export default function AdhikotStablePro() {
+export default function AdhikotOriginal1122() {
   const [match, setMatch] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('live'); 
   const [isAdmin, setIsAdmin] = useState(false);
+  const [view, setView] = useState('live'); 
+  const adminNumber = "00923015800630";
 
   useEffect(() => {
-    const matchRef = ref(db, 'liveMatch');
-    const unsubscribe = onValue(matchRef, (snap) => {
-      setMatch(snap.val()); // Null aayega agar match nahi hai
-      setLoading(false);
+    return onValue(ref(db, 'liveMatch'), (snapshot) => {
+      setMatch(snapshot.val());
     });
-    return () => unsubscribe();
   }, []);
 
-  const startNewMatch = (e) => {
+  const handleCreateMatch = (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    
-    // Comma separated players list
-    const batPlayers = fd.get('batPlayers').split(',').map(p => p.trim()).filter(p => p);
-    const bowlPlayers = fd.get('bowlPlayers').split(',').map(p => p.trim()).filter(p => p);
-
-    const newMatchData = {
-      league: fd.get('league') || "Local Tournament",
-      totalOvers: parseInt(fd.get('overs')) || 10,
-      t1: fd.get('batTeam'),
-      t2: fd.get('bowlTeam'),
-      score: 0, wkts: 0, ov: 0, bl: 0, target: 0,
-      striker: { name: batPlayers[0] || "Select Striker", r: 0, b: 0 },
-      nonStriker: { name: batPlayers[1] || "Select Non-Striker", r: 0, b: 0 },
-      bowler: { name: bowlPlayers[0] || "Select Bowler", o: 0, r: 0, w: 0 },
-      freeHit: false
+    const setup = {
+      league: fd.get('league'),
+      overs: fd.get('overs'),
+      t1: fd.get('t1'),
+      t2: fd.get('t2'),
+      umpire: fd.get('umpire'),
+      score: 0, wkts: 0, ov: 0, bl: 0,
+      striker: "Batsman 1", nonStriker: "Batsman 2",
+      bowler: "Bowler 1",
+      status: "1st Innings"
     };
-    
-    set(ref(db, 'liveMatch'), newMatchData);
+    set(ref(db, 'liveMatch'), setup);
     setView('live');
   };
 
-  const handleBall = (runs, type = "normal") => {
+  const updateScore = (runs, type = "N") => {
     if (!isAdmin || !match) return;
     let m = { ...match };
-
     if (type === "WD" || type === "NB") {
       m.score += (runs + 1);
-      m.freeHit = (type === "NB");
     } else if (type === "W") {
-      m.wkts += 1;
-      m.bl += 1;
-      m.freeHit = false;
+      m.wkts += 1; m.bl += 1;
     } else {
-      m.score += runs;
-      m.bl += 1;
-      m.striker.r += runs;
-      m.striker.b += 1;
-      m.freeHit = false;
-      // Strike rotation logic
-      if (runs % 2 !== 0) {
-        let temp = m.striker;
-        m.striker = m.nonStriker;
-        m.nonStriker = temp;
-      }
+      m.score += runs; m.bl += 1;
     }
-
-    if (m.bl >= 6) {
-      m.ov += 1;
-      m.bl = 0;
-      // Over change strike rotation
-      let temp = m.striker;
-      m.striker = m.nonStriker;
-      m.nonStriker = temp;
-    }
-
+    if (m.bl === 6) { m.ov += 1; m.bl = 0; }
     set(ref(db, 'liveMatch'), m);
   };
 
-  const shareWhatsApp = () => {
-    if(!match) return;
-    const msg = `🏏 *Live Match Update*\n\n*${match.t1}* vs *${match.t2}*\nScore: ${match.score}/${match.wkts} (${match.ov}.${match.bl} Overs)\nStriker: ${match.striker.name} - ${match.striker.r}(${match.striker.b})\n\n_Powered by Adhikot Pro_`;
-    window.open(`https://wa.me/00923015800630?text=${encodeURIComponent(msg)}`, '_blank');
-  };
-
-  if (loading) return <div style={styles.center}>Adhikot System Loading...</div>;
-
   return (
-    <div style={styles.container}>
-      {/* App Header */}
-      <div style={styles.header}>
-        <div style={styles.userRow}>
-          <div style={styles.avatar}>T</div>
+    <div style={s.container}>
+      {/* Permanent Admin Branding */}
+      <div style={s.header}>
+        <div style={s.adminInfo}>
+          <div style={s.avatar}>T</div>
           <div>
-            <div style={styles.userName}>Touqeer Iqbal Baghoor</div>
-            <div style={styles.onlineText}>🟢 WhatsApp Integrated: 00923015800630</div>
+            <div style={s.adminName}>Touqeer Iqbal Baghoor</div>
+            <div style={s.waLive}>WhatsApp: {adminNumber}</div>
           </div>
         </div>
-        {!match && <button onClick={() => setView('setup')} style={styles.setupBtn}>+ Match</button>}
+        {!match && <button onClick={() => setView('setup')} style={s.plusBtn}>+ Match</button>}
       </div>
 
-      {/* Admin Login Area */}
+      {/* Login Field for 1122 */}
       {!isAdmin && (
-        <div style={{textAlign: 'right', marginBottom: '10px'}}>
+        <div style={s.loginBar}>
           <input 
             type="password" 
-            placeholder="Admin PIN" 
-            onChange={(e) => { if(e.target.value === "6545") setIsAdmin(true); }} 
-            style={styles.pinInput}
+            placeholder="PIN" 
+            onChange={(e) => e.target.value === "1122" && setIsAdmin(true)} 
+            style={s.pinInput} 
           />
         </div>
       )}
 
-      {/* MATCH SETUP FORM (Same as your screenshot) */}
-      {view === 'setup' && !match && isAdmin && (
-        <form onSubmit={startNewMatch} style={styles.card}>
-          <h3 style={{marginTop: 0, color: '#facc15'}}>Match Settings</h3>
-          <input name="league" placeholder="League Name (e.g. Adhi Kot Cup)" style={styles.input} />
-          <input name="overs" type="number" placeholder="Total Overs" style={styles.input} required />
-          <input name="batTeam" placeholder="Batting Team" style={styles.input} required />
-          <textarea name="batPlayers" placeholder="Batsmen (Ali, Ahmed...)" style={styles.area} required />
-          <input name="bowlTeam" placeholder="Bowling Team" style={styles.input} required />
-          <textarea name="bowlPlayers" placeholder="Bowlers (Zaid, Khan...)" style={styles.area} required />
-          <button type="submit" style={styles.startBtn}>Start Match</button>
+      {/* Setup View */}
+      {view === 'setup' && isAdmin && !match && (
+        <form onSubmit={handleCreateMatch} style={s.card}>
+          <h3 style={{color:'#facc15'}}>New Match Setup</h3>
+          <input name="league" placeholder="League Name" style={s.input} />
+          <input name="overs" placeholder="Total Overs" type="number" style={s.input} />
+          <input name="t1" placeholder="Batting Team" style={s.input} />
+          <input name="t2" placeholder="Bowling Team" style={s.input} />
+          <input name="umpire" placeholder="Umpire Name" style={s.input} />
+          <button type="submit" style={s.startBtn}>START LIVE</button>
         </form>
       )}
 
-      {/* LIVE SCOREBOARD */}
-      {view === 'live' && match && (
-        <div style={styles.liveContainer}>
-          <div style={styles.boardCard}>
-            <div style={styles.teams}>{match.t1} vs {match.t2}</div>
-            <div style={styles.mainScore}>{match.score}/{match.wkts}</div>
-            <div style={styles.oversText}>({match.ov}.{match.bl} / {match.totalOvers})</div>
-            {match.freeHit && <div style={styles.freeHitText}>⚡ FREE HIT</div>}
-            
-            <button onClick={shareWhatsApp} style={styles.waBtn}>💬 Send WhatsApp Update</button>
+      {/* Live Dashboard */}
+      {match && (
+        <div style={s.liveArea}>
+          <div style={s.scoreCard}>
+            <div style={s.leagueName}>{match.league}</div>
+            <div style={s.teams}>{match.t1} vs {match.t2}</div>
+            <div style={s.bigScore}>{match.score}/{match.wkts}</div>
+            <div style={s.overs}>Overs: {match.ov}.{match.bl} / {match.overs}</div>
+            <div style={s.umpire}>Umpire: {match.umpire}</div>
           </div>
 
-          <div style={styles.statsGrid}>
-            <div style={styles.statBox}>
-              <div style={styles.statLabel}>Striker</div>
-              <div style={styles.statValue}>🏏 {match.striker.name}*</div>
-              <div style={styles.statRuns}>{match.striker.r}({match.striker.b})</div>
-            </div>
-            <div style={styles.statBox}>
-              <div style={styles.statLabel}>Non-Striker</div>
-              <div style={styles.statValue}>🏏 {match.nonStriker.name}</div>
-              <div style={styles.statRuns}>{match.nonStriker.r}({match.nonStriker.b})</div>
-            </div>
-          </div>
-
-          {/* Admin Controls */}
           {isAdmin && (
-            <div style={styles.controlsBlock}>
-              <div style={styles.btnGrid}>
-                {[0, 1, 2, 3, 4, 6].map(n => (
-                  <button key={n} onClick={() => handleBall(n)} style={styles.runBtn}>{n}</button>
-                ))}
-                <button onClick={() => handleBall(0, "WD")} style={styles.extraBtn}>WD</button>
-                <button onClick={() => handleBall(0, "NB")} style={styles.extraBtn}>NB</button>
-                <button onClick={() => handleBall(0, "W")} style={styles.wktBtn}>WKT</button>
+            <div style={s.controls}>
+              <div style={s.grid}>
+                {[0,1,2,3,4,6].map(n => <button key={n} onClick={() => updateScore(n)} style={s.btn}>{n}</button>)}
+                <button onClick={() => updateScore(0, "WD")} style={s.extra}>WD</button>
+                <button onClick={() => updateScore(0, "NB")} style={s.extra}>NB</button>
+                <button onClick={() => updateScore(0, "W")} style={s.wkt}>WKT</button>
               </div>
-              <button onClick={() => { if(window.confirm("End Match?")) { remove(ref(db, 'liveMatch')); setView('live'); } }} style={styles.delBtn}>End & Delete Match</button>
+              <button onClick={() => remove(ref(db, 'liveMatch'))} style={s.delBtn}>Finish Match</button>
             </div>
           )}
         </div>
       )}
 
-      {/* No Match State */}
-      {view === 'live' && !match && (
-        <div style={styles.noMatch}>
-          <p>Koi Match Live Nahi Hai</p>
-        </div>
-      )}
+      {!match && view === 'live' && <div style={s.empty}>Wait for Match to Start...</div>}
     </div>
   );
 }
 
-// CSS Styles
-const styles = {
-  container: { background: '#0a0e1a', minHeight: '100vh', color: 'white', padding: '15px', fontFamily: 'sans-serif' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#161e2d', padding: '12px', borderRadius: '12px', marginBottom: '20px' },
-  userRow: { display: 'flex', alignItems: 'center', gap: '10px' },
-  avatar: { width: '40px', height: '40px', background: '#facc15', borderRadius: '50%', color: 'black', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
-  userName: { fontSize: '14px', fontWeight: 'bold' },
-  onlineText: { fontSize: '10px', color: '#22c55e' },
-  setupBtn: { background: '#3b82f6', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '8px', fontWeight: 'bold' },
-  pinInput: { background: 'transparent', border: '1px solid #334155', color: 'white', padding: '8px', borderRadius: '8px', width: '100px', textAlign: 'center' },
-  card: { background: '#161e2d', padding: '20px', borderRadius: '15px', border: '1px solid #1e293b' },
-  input: { width: '100%', padding: '15px', marginBottom: '10px', background: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '8px', boxSizing: 'border-box' },
-  area: { width: '100%', padding: '15px', marginBottom: '10px', background: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '8px', minHeight: '80px', boxSizing: 'border-box' },
-  startBtn: { width: '100%', padding: '15px', background: '#facc15', color: 'black', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '16px' },
-  boardCard: { background: 'linear-gradient(180deg, #1e293b, #0f172a)', padding: '25px', borderRadius: '15px', textAlign: 'center', marginBottom: '15px' },
-  teams: { fontSize: '18px', fontWeight: '600', color: '#94a3b8' },
-  mainScore: { fontSize: '65px', fontWeight: 'bold', color: '#facc15', margin: '10px 0' },
-  oversText: { fontSize: '20px', color: 'white' },
-  freeHitText: { color: '#ef4444', fontWeight: 'bold', marginTop: '10px', animation: 'pulse 1s infinite' },
-  waBtn: { background: '#25D366', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', marginTop: '15px', width: '100%' },
-  statsGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' },
-  statBox: { background: '#161e2d', padding: '15px', borderRadius: '10px', textAlign: 'center' },
-  statLabel: { fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase' },
-  statValue: { fontSize: '14px', fontWeight: 'bold', margin: '5px 0' },
-  statRuns: { fontSize: '18px', fontWeight: '900', color: '#facc15' },
-  controlsBlock: { background: '#161e2d', padding: '15px', borderRadius: '15px' },
-  btnGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' },
-  runBtn: { padding: '15px', background: 'white', color: 'black', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '18px' },
-  extraBtn: { padding: '15px', background: '#facc15', color: 'black', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '16px' },
-  wktBtn: { padding: '15px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '16px' },
-  delBtn: { width: '100%', padding: '15px', background: '#334155', color: 'white', border: 'none', borderRadius: '8px', marginTop: '15px', fontWeight: 'bold' },
-  center: { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0e1a', color: '#facc15', fontSize: '18px' },
-  noMatch: { textAlign: 'center', marginTop: '100px', color: '#94a3b8', fontSize: '18px' }
+const s = {
+  container: { background: '#050a18', minHeight: '100vh', padding: '15px', color: 'white', fontFamily: 'sans-serif' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#111827', padding: '10px', borderRadius: '12px', borderBottom: '2px solid #facc15' },
+  adminInfo: { display: 'flex', alignItems: 'center', gap: '10px' },
+  avatar: { width: '40px', height: '40px', background: '#facc15', color: 'black', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
+  adminName: { fontSize: '14px', fontWeight: 'bold' },
+  waLive: { fontSize: '10px', color: '#22c55e' },
+  loginBar: { textAlign: 'right', marginTop: '10px' },
+  pinInput: { background: 'transparent', border: '1px solid #374151', color: 'white', width: '50px', textAlign: 'center', borderRadius: '5px' },
+  card: { background: '#111827', padding: '20px', borderRadius: '15px', marginTop: '20px' },
+  input: { width: '100%', padding: '12px', marginBottom: '10px', background: '#1f2937', border: 'none', color: 'white', borderRadius: '8px' },
+  startBtn: { width: '100%', padding: '15px', background: '#facc15', color: 'black', border: 'none', borderRadius: '8px', fontWeight: 'bold' },
+  scoreCard: { background: 'linear-gradient(to bottom, #1e293b, #0f172a)', padding: '30px', borderRadius: '20px', textAlign: 'center', marginTop: '20px' },
+  bigScore: { fontSize: '60px', fontWeight: 'bold', color: '#facc15' },
+  controls: { marginTop: '20px', background: '#111827', padding: '15px', borderRadius: '15px' },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' },
+  btn: { padding: '15px', background: 'white', color: 'black', borderRadius: '8px', border: 'none', fontWeight: 'bold' },
+  extra: { padding: '15px', background: '#facc15', color: 'black', borderRadius: '8px', border: 'none', fontWeight: 'bold' },
+  wkt: { padding: '15px', background: '#ef4444', color: 'white', borderRadius: '8px', border: 'none', fontWeight: 'bold' },
+  delBtn: { width: '100%', padding: '10px', marginTop: '15px', background: '#374151', color: 'white', border: 'none', borderRadius: '8px' },
+  plusBtn: { background: '#facc15', color: 'black', border: 'none', padding: '5px 15px', borderRadius: '8px', fontWeight: 'bold' },
+  empty: { textAlign: 'center', marginTop: '100px', opacity: 0.5 }
 };
