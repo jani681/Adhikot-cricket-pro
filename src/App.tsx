@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps } from "firebase/app";
 import { getDatabase, ref, set, onValue, update, remove } from "firebase/database";
-import { FaWhatsapp, FaSyncAlt, FaCircle, FaUserShield, FaCalendarAlt, FaTrophy } from 'react-icons/fa';
+import { FaWhatsapp, FaSyncAlt, FaUserShield, FaTrophy, FaTrash, FaSave } from 'react-icons/fa';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB0e37uvyY7Jpuj-FYxDlX52hjb0uwsBfg",
@@ -11,62 +11,65 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getDatabase(app);
 
-export default function AdhikotProFixed() {
+export default function AdhikotProAdvanced() {
   const [match, setMatch] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [selModal, setSelModal] = useState(null); 
-  const [anim, setAnim] = useState("");
+  const [selModal, setSelModal] = useState(null);
+  const [outModal, setOutModal] = useState(false);
 
   useEffect(() => {
     const matchRef = ref(db, 'liveMatch');
-    return onValue(matchRef, (snap) => {
-      setMatch(snap.val());
+    const unsub = onValue(matchRef, (snap) => {
+      if (snap.exists()) setMatch(snap.val());
+      else setMatch(null);
     });
+    return () => unsub();
   }, []);
 
-  const triggerAnim = (txt) => { setAnim(txt); setTimeout(() => setAnim(""), 3000); };
-
-  const handleScore = (runs, type = 'normal') => {
+  const handleScore = (runs, type = 'normal', isExtraRun = 0, isWicket = false) => {
     if (!match || match.status === 'Finished') return;
-    let { score, wkts, bl, ov, maxOv, target, innings, s1, s2, active, bwr_r, bwr_w, bwr_o } = { ...match };
+    let data = { ...match };
+    let totalRunsThisBall = runs + isExtraRun;
 
-    if (type === 'wkt') {
-        wkts += 1; bwr_w += 1; bl += 1;
-        active === 1 ? s1.r = "OUT" : s2.r = "OUT";
-        triggerAnim("OUT! ☝️");
-    } else if (type === 'normal') {
-        score += runs; bwr_r += runs; bl += 1;
-        active === 1 ? (s1.r += runs, s1.b += 1) : (s2.r += runs, s2.b += 1);
-        if (runs === 4) triggerAnim("FOUR! ✨");
-        if (runs === 6) triggerAnim("SIXER! 🚀");
-        if (runs === 1 || runs === 3) active = active === 1 ? 2 : 1;
-    } else if (type === 'wd' || type === 'nb') {
-        score += 1; bwr_r += 1;
-        triggerAnim(type === 'wd' ? "WIDE" : "NO BALL");
+    if (type === 'normal') {
+      data.score += runs;
+      data.bwr_r += runs;
+      data.bl += 1;
+      let p = data.active === 1 ? data.s1 : data.s2;
+      p.r += runs; p.b += 1;
+      if (runs === 4) p.fours += 1;
+      if (runs === 6) p.sixes += 1;
+      if (runs === 1 || runs === 3) data.active = data.active === 1 ? 2 : 1;
+    } 
+    else if (type === 'wd' || type === 'nb') {
+      data.score += (1 + runs); // 1 for extra + extra runs taken
+      data.bwr_r += (1 + runs);
+      let p = data.active === 1 ? data.s1 : data.s2;
+      if (type === 'nb') { p.r += runs; p.b += 1; if(runs === 4) p.fours += 1; if(runs === 6) p.sixes += 1; }
+      if (runs === 1 || runs === 3) data.active = data.active === 1 ? 2 : 1;
     }
 
-    if (bl === 6) { ov += 1; bl = 0; bwr_o += 1; active = active === 1 ? 2 : 1; triggerAnim("OVER! 🔄"); }
-
-    let status = 'Live';
-    let result = '';
-    if (innings === 1 && (ov >= maxOv || wkts >= 10)) { status = 'Innings Break'; target = score + 1; }
-    else if (innings === 2) {
-        if (score >= target) { status = 'Finished'; result = `${match.t2} WON! 🏆`; }
-        else if (ov >= maxOv || wkts >= 10) { status = 'Finished'; result = `${match.t1} WON! 🏆`; }
+    if (isWicket) {
+      data.wkts += 1;
+      data.bwr_w += 1;
+      setOutModal(true); // Open wicket detail modal
     }
 
-    update(ref(db, 'liveMatch'), { score, wkts, bl, ov, status, target, result, s1, s2, active, bwr_r, bwr_w, bwr_o });
+    if (data.bl === 6) { data.ov += 1; data.bl = 0; data.bwr_o += 1; data.active = data.active === 1 ? 2 : 1; }
+    
+    // Auto-check innings end
+    if (data.innings === 1 && (data.ov >= data.maxOv || data.wkts >= 10)) { data.status = 'Innings Break'; data.target = data.score + 1; }
+    
+    update(ref(db, 'liveMatch'), data);
   };
 
-  const manualSelect = (type, pData) => {
-    const pArray = pData.split('-');
-    const name = pArray[0];
-    const phone = pArray[1] || "";
-    
-    if (type === 's1') update(ref(db, 'liveMatch'), { 's1/n': name, 's1/ph': phone, 's1/r': 0, 's1/b': 0, active: 1 });
-    if (type === 's2') update(ref(db, 'liveMatch'), { 's2/n': name, 's2/ph': phone, 's2/r': 0, 's2/b': 0, active: 2 });
-    if (type === 'bwr') update(ref(db, 'liveMatch'), { bwr: name, bwr_ph: phone, bwr_r: 0, bwr_w: 0, bwr_o: 0 });
-    setSelModal(null);
+  const saveMatchToHistory = () => {
+    if (!match) return;
+    const historyRef = ref(db, `matchHistory/${Date.now()}`);
+    set(historyRef, match).then(() => {
+        alert("Match Saved to History!");
+        remove(ref(db, 'liveMatch'));
+    });
   };
 
   if (!isAdmin && !match) {
@@ -74,117 +77,131 @@ export default function AdhikotProFixed() {
       <div style={s.container}>
         <div style={s.authBox}>
           <FaUserShield size={50} color="#facc15" />
-          <h2 style={{color:'white', margin:'20px 0'}}>Adhikot Admin Panel</h2>
+          <h2 style={{color:'white'}}>Admin Access</h2>
           <input type="password" placeholder="Enter PIN" style={s.pinInput} onChange={(e) => e.target.value === "6545" && setIsAdmin(true)} />
         </div>
       </div>
     );
   }
 
-  const currentRR = match ? (match.score / (match.ov + match.bl / 6) || 0).toFixed(2) : "0.00";
-
   return (
     <div style={s.container}>
-      {anim && <div style={s.bigAnim}>{anim}</div>}
-      
       <div style={s.header}>
         <div style={s.flexBetween}>
            <div style={s.flex}>
              <div style={s.avatar}>T</div>
-             <div><b>Touqeer Iqbal</b><br/><span style={s.livePulse}><FaCircle size={7}/> LIVE</span></div>
+             <div><b>Touqeer Iqbal</b><br/><small style={{color:'#ef4444'}}>● {match?.status || 'OFFLINE'}</small></div>
            </div>
-           <a href="https://wa.me/923015800630" style={{color:'#22c55e'}}><FaWhatsapp size={24}/></a>
+           <FaWhatsapp size={24} color="#22c55e" onClick={() => window.open(`https://wa.me/923015800630?text=Score: ${match?.score}/${match?.wkts}`)}/>
         </div>
       </div>
 
       {!match ? (
         <div style={s.setupBox}>
-          <h3 style={{color:'#facc15'}}><FaTrophy/> New Match</h3>
+          <h3 style={{color:'#facc15'}}><FaTrophy/> New Match Setup</h3>
           <form onSubmit={(e) => {
             e.preventDefault();
             const fd = new FormData(e.target);
             set(ref(db, 'liveMatch'), {
-              lg: fd.get('lg'), gr: fd.get('gr'), toss: fd.get('toss'),
-              t1: fd.get('t1'), t2: fd.get('t2'), date: fd.get('date'),
+              lg: fd.get('lg'), toss: fd.get('toss'), choice: fd.get('choice'), t1: fd.get('t1'), t2: fd.get('t2'), 
+              date: new Date().toLocaleDateString(), maxOv: parseInt(fd.get('max')),
               t1p: fd.get('t1p').split(','), t2p: fd.get('t2p').split(','),
-              s1: {n: 'Select Striker', r: 0, b: 0, ph:''}, s2: {n: 'Select Non-Striker', r: 0, b: 0, ph:''}, active: 1,
-              bwr: 'Select Bowler', bwr_ph:'', bwr_r: 0, bwr_w: 0, bwr_o: 0,
-              score: 0, wkts: 0, ov: 0, bl: 0, innings: 1, status: 'Live', target: 0, maxOv: parseInt(fd.get('max'))
+              s1: {n: 'Striker', r: 0, b: 0, fours: 0, sixes: 0}, s2: {n: 'Non-Striker', r: 0, b: 0, fours: 0, sixes: 0}, 
+              active: 1, score: 0, wkts: 0, ov: 0, bl: 0, innings: 1, status: 'Live', bwr: 'Bowler', bwr_r:0, bwr_w:0, bwr_o:0
             });
           }}>
-            <input name="lg" placeholder="League Name" style={s.input} required />
-            <input name="toss" placeholder="Toss Result" style={s.input} />
-            <div style={s.flexGap}><input name="t1" placeholder="Batting Team" style={s.input}/><input name="t2" placeholder="Bowling Team" style={s.input}/></div>
-            <textarea name="t1p" placeholder="Batting Squad (Name-Number, Name-Number...)" style={s.area}/>
-            <textarea name="t2p" placeholder="Bowling Squad (Name-Number, Name-Number...)" style={s.area}/>
-            <div style={s.flexGap}><input name="date" type="date" style={s.input}/><input name="max" placeholder="Total Overs" type="number" style={s.input}/></div>
-            <button type="submit" style={s.goldBtn}>START LIVE</button>
+            <input name="lg" placeholder="Tournament Name" style={s.input} required />
+            <div style={s.flexGap}>
+                <input name="toss" placeholder="Who won toss?" style={s.input}/>
+                <select name="choice" style={s.input}><option value="Batting">Batting</option><option value="Bowling">Bowling</option></select>
+            </div>
+            <div style={s.flexGap}><input name="t1" placeholder="Team A" style={s.input}/><input name="t2" placeholder="Team B" style={s.input}/></div>
+            <textarea name="t1p" placeholder="Team A Squad (Comma separated)" style={s.area}/>
+            <textarea name="t2p" placeholder="Team B Squad (Comma separated)" style={s.area}/>
+            <input name="max" placeholder="Total Overs" type="number" style={s.input}/>
+            <button type="submit" style={s.goldBtn}>START LIVE SCOREBOARD</button>
           </form>
         </div>
       ) : (
         <div style={{padding:'10px'}}>
           <div style={s.card}>
-            <div style={{fontSize:'11px', opacity:0.6}}>{match.toss} | Ground: {match.gr}</div>
             <div style={s.mainScore}>{match.score}/{match.wkts}</div>
-            <div style={s.overInfo}>{match.ov}.{match.bl} / {match.maxOv}</div>
-            <div style={s.rrBox}>Run Rate: {currentRR}</div>
-            {match.target > 0 && <div style={s.targetBox}>TARGET: {match.target}</div>}
-            {match.result && <div style={s.resultBox}>{match.result}</div>}
+            <div style={s.overInfo}>Overs: {match.ov}.{match.bl} / {match.maxOv}</div>
+            {match.target > 0 && <div style={s.targetBox}>Target: {match.target}</div>}
           </div>
 
           <div style={s.playerCard}>
-             <div style={match.active === 1 ? s.activeP : s.pRow} onClick={() => setSelModal('s1')}>
-                <div style={s.flex}>
-                    <span>{match.s1.n}*</span>
-                    {match.s1.ph && <FaWhatsapp color="#22c55e" size={12}/>}
-                    <FaSyncAlt size={10} style={{opacity:0.4}}/>
+             {[match.s1, match.s2].map((p, i) => (
+                <div key={i} style={match.active === (i+1) ? s.activeP : s.pRow} onClick={() => setSelModal(i === 0 ? 's1' : 's2')}>
+                   <span>{p.n}{match.active === (i+1) ? '*' : ''}</span>
+                   <span>{p.r}({p.b}) <small>4s:{p.fours} 6s:{p.sixes}</small></span>
                 </div>
-                <span>{match.s1.r}({match.s1.b})</span>
-             </div>
-             <div style={match.active === 2 ? s.activeP : s.pRow} onClick={() => setSelModal('s2')}>
-                <div style={s.flex}>
-                    <span>{match.s2.n}</span>
-                    {match.s2.ph && <FaWhatsapp color="#22c55e" size={12}/>}
-                    <FaSyncAlt size={10} style={{opacity:0.4}}/>
-                </div>
-                <span>{match.s2.r}({match.s2.b})</span>
-             </div>
+             ))}
              <div style={s.divider}></div>
              <div style={s.pRow} onClick={() => setSelModal('bwr')}>
-                <div style={s.flex}>
-                    <span style={{color:'#60a5fa'}}>{match.bwr}</span>
-                    {match.bwr_ph && <FaWhatsapp color="#22c55e" size={12}/>}
-                    <FaSyncAlt size={10} style={{opacity:0.4}}/>
-                </div>
+                <span style={{color:'#60a5fa'}}>{match.bwr} (B)</span>
                 <span>{match.bwr_w}/{match.bwr_r} ({match.bwr_o}.{match.bl})</span>
              </div>
           </div>
 
-          {isAdmin && match.status !== 'Finished' && (
-            <div style={s.grid}>
+          {isAdmin && (
+            <div style={s.adminPanel}>
+              <div style={s.grid}>
                 {[0,1,2,3,4,6].map(r => <button key={r} onClick={()=>handleScore(r)} style={s.numBtn}>{r}</button>)}
-                <button onClick={()=>handleScore(0,'wd')} style={s.exBtn}>WD</button>
-                <button onClick={()=>handleScore(0,'nb')} style={s.exBtn}>NB</button>
-                <button onClick={()=>handleScore(0,'wkt')} style={s.wktBtn}>WKT</button>
+                
+                {/* Advanced Extra Buttons */}
+                <button onClick={()=>handleScore(0, 'wd')} style={s.exBtn}>WD</button>
+                <button onClick={()=>handleScore(1, 'wd')} style={s.exBtn}>WD+1</button>
+                <button onClick={()=>handleScore(4, 'wd')} style={s.exBtn}>WD+4</button>
+                
+                <button onClick={()=>handleScore(0, 'nb')} style={s.nbBtn}>NB</button>
+                <button onClick={()=>handleScore(1, 'nb')} style={s.nbBtn}>NB+1</button>
+                <button onClick={()=>handleScore(4, 'nb')} style={s.nbBtn}>NB+4</button>
+                <button onClick={()=>handleScore(6, 'nb')} style={s.nbBtn}>NB+6</button>
+
+                <button onClick={()=>handleScore(0,'normal',0, true)} style={s.wktBtn}>OUT</button>
+                <button onClick={()=>handleScore(0,'nb',0, true)} style={s.wktBtn}>NB+WKT</button>
+              </div>
+
+              <div style={s.flexGap}>
+                <button onClick={saveMatchToHistory} style={s.saveBtn}><FaSave/> Save Match</button>
+                <button onClick={() => remove(ref(db, 'liveMatch'))} style={s.delBtn}><FaTrash/></button>
+              </div>
             </div>
           )}
-
-          <button onClick={() => {
-              if(match.innings === 1) update(ref(db, 'liveMatch'), {innings: 2, score: 0, wkts: 0, ov: 0, bl: 0, target: match.score + 1});
-              else remove(ref(db, 'liveMatch'));
-          }} style={s.saveBtn}>{match.innings === 1 ? "Start 2nd Innings" : "Reset Match"}</button>
         </div>
       )}
 
+      {/* Wicket Details Modal */}
+      {outModal && (
+        <div style={s.overlay}>
+            <div style={s.modal}>
+                <h3>How was the Wicket?</h3>
+                {['Bold', 'Caught', 'Run Out', 'Stumped', 'LBW'].map(t => (
+                    <button key={t} style={s.input} onClick={() => {
+                        // Logic to record wicket type can be added to DB here
+                        setOutModal(false);
+                        setSelModal(match.active === 1 ? 's1' : 's2'); // Ask for new batsman
+                    }}>{t}</button>
+                ))}
+            </div>
+        </div>
+      )}
+
+      {/* Selection Modal (Players/Bowlers) */}
       {selModal && (
         <div style={s.overlay} onClick={() => setSelModal(null)}>
            <div style={s.modal} onClick={e => e.stopPropagation()}>
-              <h3 style={{marginBottom:'15px'}}>Select {selModal === 'bwr' ? 'Bowler' : 'Player'}</h3>
-              {(selModal === 'bwr' ? match.t2p : match.t1p).map(p => (
-                <div key={p} style={s.pItem} onClick={() => manualSelect(selModal, p)}>
-                  <span>{p.split('-')[0]}</span>
-                  <FaWhatsapp size={18} color="#22c55e" />
-                </div>
+              <h3>Select New {selModal === 'bwr' ? 'Bowler' : 'Batsman'}</h3>
+              {(selModal === 'bwr' ? match.t2p : match.t1p).map((p, i) => (
+                <div key={i} style={s.pItem} onClick={() => {
+                    const up = {};
+                    if(selModal==='s1') up.s1 = {n:p, r:0, b:0, fours:0, sixes:0};
+                    if(selModal==='s2') up.s2 = {n:p, r:0, b:0, fours:0, sixes:0};
+                    if(selModal==='bwr') up.bwr = p;
+                    update(ref(db, 'liveMatch'), up);
+                    setSelModal(null);
+                }}>{p}</div>
               ))}
            </div>
         </div>
@@ -195,34 +212,34 @@ export default function AdhikotProFixed() {
 
 const s = {
   container: { background: '#020617', minHeight: '100vh', color: 'white', fontFamily: 'sans-serif' },
-  authBox: { textAlign:'center', paddingTop:'150px' },
-  pinInput: { padding:'15px', background:'#0f172a', border:'2px solid #facc15', color:'white', borderRadius:'10px', width:'70%', textAlign:'center' },
-  header: { background:'#0f172a', padding:'15px', borderBottom:'1px solid #334155' },
-  flex: { display:'flex', alignItems:'center', gap:'8px' },
+  authBox: { textAlign:'center', paddingTop:'100px' },
+  pinInput: { padding:'12px', background:'#0f172a', border:'2px solid #facc15', color:'white', borderRadius:'8px', marginTop:'10px' },
+  header: { background:'#0f172a', padding:'15px', borderBottom:'1px solid #1e293b' },
+  flex: { display:'flex', alignItems:'center', gap:'10px' },
   flexBetween: { display:'flex', alignItems:'center', justifyContent:'space-between' },
-  livePulse: { color:'#ef4444', fontSize:'9px', fontWeight:'bold' },
   avatar: { width:'35px', height:'35px', background:'#facc15', borderRadius:'50%', color:'black', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold' },
   setupBox: { padding:'20px', background:'#0f172a', margin:'15px', borderRadius:'15px' },
   input: { width:'100%', padding:'12px', marginBottom:'10px', background:'#1e293b', border:'1px solid #334155', color:'white', borderRadius:'8px', boxSizing:'border-box' },
-  area: { width:'100%', padding:'10px', height:'60px', background:'#1e293b', border:'1px solid #334155', color:'white', borderRadius:'8px', marginBottom:'10px' },
+  area: { width:'100%', padding:'12px', height:'60px', background:'#1e293b', border:'1px solid #334155', color:'white', borderRadius:'8px', marginBottom:'10px' },
+  flexGap: { display:'flex', gap:'10px', marginBottom:'10px' },
   goldBtn: { width:'100%', padding:'15px', background:'#facc15', color:'black', fontWeight:'bold', border:'none', borderRadius:'8px' },
-  card: { background:'#0f172a', padding:'25px', borderRadius:'20px', textAlign:'center', border:'1px solid #1e293b', margin:'10px' },
-  mainScore: { fontSize:'60px', fontWeight:'bold', color:'#facc15', margin:'5px 0' },
+  card: { background:'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', padding:'25px', borderRadius:'20px', textAlign:'center', margin:'10px', border:'1px solid #334155' },
+  mainScore: { fontSize:'55px', fontWeight:'bold', color:'#facc15' },
   overInfo: { fontSize:'18px', opacity:0.8 },
-  rrBox: { marginTop:'10px', fontSize:'14px', color:'#facc15', background:'rgba(250,204,21,0.1)', display:'inline-block', padding:'5px 15px', borderRadius:'20px' },
-  targetBox: { color:'#facc15', fontWeight:'bold', fontSize:'22px', marginTop:'15px' },
-  resultBox: { background:'#22c55e', padding:'10px', borderRadius:'10px', marginTop:'15px', fontWeight:'bold' },
-  playerCard: { background:'#0f172a', margin:'15px', padding:'15px', borderRadius:'15px' },
-  pRow: { display:'flex', justifyContent:'space-between', padding:'12px 0', opacity:0.7 },
-  activeP: { display:'flex', justifyContent:'space-between', padding:'12px 0', color:'#facc15', fontWeight:'bold' },
-  divider: { height:'1px', background:'#1e293b', margin:'5px 0' },
-  grid: { display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'10px', padding:'10px' },
-  numBtn: { padding:'20px', background:'white', color:'black', borderRadius:'12px', fontWeight:'bold', fontSize:'20px', border:'none' },
-  exBtn: { padding:'20px', background:'#facc15', color:'black', borderRadius:'12px', fontWeight:'bold', border:'none' },
-  wktBtn: { padding:'20px', background:'#ef4444', color:'white', borderRadius:'12px', fontWeight:'bold', border:'none' },
-  saveBtn: { width:'95%', padding:'15px', background:'#22c55e', color:'white', borderRadius:'12px', fontWeight:'bold', margin:'10px auto', display:'block', border:'none' },
-  bigAnim: { position:'fixed', top:'30%', left:'50%', transform:'translateX(-50%)', background:'#facc15', color:'black', padding:'20px 40px', borderRadius:'50px', fontWeight:'bold', zIndex:1000 },
-  overlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.9)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000 },
-  modal: { background:'#1e293b', width:'85%', padding:'20px', borderRadius:'20px', maxHeight:'70vh', overflowY:'auto' },
-  pItem: { display:'flex', justifyContent:'space-between', padding:'15px 0', borderBottom:'1px solid #334155' }
+  targetBox: { background:'#facc15', color:'black', display:'inline-block', padding:'5px 15px', borderRadius:'20px', fontWeight:'bold', marginTop:'10px' },
+  playerCard: { background:'#0f172a', margin:'10px', padding:'15px', borderRadius:'15px' },
+  pRow: { display:'flex', justifyContent:'space-between', padding:'8px 0', opacity:0.7 },
+  activeP: { display:'flex', justifyContent:'space-between', padding:'8px 0', color:'#facc15', fontWeight:'bold', borderLeft:'3px solid #facc15', paddingLeft:'10px' },
+  divider: { height:'1px', background:'#334155', margin:'10px 0' },
+  adminPanel: { marginTop:'15px' },
+  grid: { display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'10px' },
+  numBtn: { padding:'18px', background:'white', color:'black', borderRadius:'10px', fontWeight:'bold', border:'none' },
+  exBtn: { padding:'18px', background:'#fb923c', color:'white', borderRadius:'10px', fontWeight:'bold', border:'none' },
+  nbBtn: { padding:'18px', background:'#8b5cf6', color:'white', borderRadius:'10px', fontWeight:'bold', border:'none' },
+  wktBtn: { padding:'18px', background:'#ef4444', color:'white', borderRadius:'10px', fontWeight:'bold', border:'none' },
+  saveBtn: { flex:2, padding:'15px', background:'#22c55e', color:'white', borderRadius:'10px', fontWeight:'bold', border:'none' },
+  delBtn: { flex:1, padding:'15px', background:'#b91c1c', color:'white', borderRadius:'10px', fontWeight:'bold', border:'none' },
+  overlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.9)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:5000 },
+  modal: { background:'#1e293b', width:'90%', padding:'20px', borderRadius:'20px', textAlign:'center' },
+  pItem: { padding:'15px', borderBottom:'1px solid #334155', fontSize:'18px' }
 };
