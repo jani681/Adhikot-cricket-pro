@@ -3,7 +3,6 @@ import { initializeApp, getApps } from "firebase/app";
 import { getDatabase, ref, set, onValue, update, remove } from "firebase/database";
 import { FaWhatsapp, FaUndo, FaSave, FaUserCircle } from 'react-icons/fa';
 
-// Sahi Firebase Config yahan paste karen
 const firebaseConfig = {
   apiKey: "AIzaSyB0e37uvyY7Jpuj-FYxDlX52hjb0uwsBfg",
   databaseURL: "https://adhikot-cricket-pro-default-rtdb.firebaseio.com"
@@ -12,10 +11,9 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getDatabase(app);
 
-export default function AdhikotProV3() {
+export default function AdhikotProV3Final() {
   const [match, setMatch] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -26,32 +24,51 @@ export default function AdhikotProV3() {
     });
   }, []);
 
-  const startNewMatch = (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const setup = {
-      lg: fd.get('lg'), gr: fd.get('gr'),
-      t1: fd.get('t1'), t2: fd.get('t2'),
-      overs: fd.get('overs'), score: 0, wkts: 0, ov: 0, bl: 0,
-      status: "LIVE"
-    };
-    set(ref(db, 'liveMatch'), setup);
+  const handleScore = (runs, type = 'normal') => {
+    if (!match) return;
+    let { score, wkts, bl, ov, strike } = { ...match };
+    
+    if (type === 'normal') {
+      score += runs;
+      bl += 1;
+      // Strike Rotation logic
+      if (runs === 1 || runs === 3) strike = strike === 1 ? 2 : 1;
+    } else if (type === 'wd' || type === 'nb') {
+      score += 1;
+    } else if (type === 'wkt') {
+      wkts += 1;
+      bl += 1;
+    }
+
+    if (bl === 6) { 
+      ov += 1; bl = 0; 
+      strike = strike === 1 ? 2 : 1; // Over khatam honay par strike change
+    }
+    
+    update(ref(db, 'liveMatch'), { score, wkts, bl, ov, strike });
+  };
+
+  const sendWhatsApp = () => {
+    const text = `🏏 *Adhikot Live Update*\n🏆 ${match.lg}\n📊 Score: ${match.score}/${match.wkts}\n🎾 Overs: ${match.ov}.${match.bl}\n🚩 ${match.t1} vs ${match.t2}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   if (loading) return <div style={s.center}>Loading Adhikot Pro...</div>;
 
-  // Login Screen
+  // 1. Password Hidden (type="password")
   if (!isAdmin && !match) {
     return (
       <div style={s.authPage}>
-        <h2 style={{color:'#facc15'}}>Adhikot Pro Admin</h2>
-        <input 
-          type="password" 
-          placeholder="Enter PIN (6545)" 
-          onChange={(e) => e.target.value === "6545" && setIsAdmin(true)}
-          style={s.pInput}
-        />
-        <p style={{opacity:0.5}}>No Live Match</p>
+        <div style={s.logoCard}>
+          <FaUserCircle size={60} color="#facc15" />
+          <h2 style={{margin:'15px 0'}}>Adhikot Admin</h2>
+          <input 
+            type="password" 
+            placeholder="Enter Admin PIN" 
+            style={s.pInput}
+            onChange={(e) => e.target.value === "6545" && setIsAdmin(true)}
+          />
+        </div>
       </div>
     );
   }
@@ -59,48 +76,73 @@ export default function AdhikotProV3() {
   return (
     <div style={s.container}>
       <div style={s.header}>
-        <div style={s.profile}><FaUserCircle size={30} color="#facc15"/> Touqeer Iqbal</div>
-        {isAdmin && <button onClick={() => setIsAdmin(false)} style={s.lock}>Lock</button>}
+        <span style={s.profile}><FaUserCircle color="#facc15"/> Touqeer Iqbal</span>
+        <button onClick={sendWhatsApp} style={s.waCircle}><FaWhatsapp /></button>
       </div>
 
-      {isAdmin && !match ? (
-        <form onSubmit={startNewMatch} style={s.form}>
-          <h3 style={{color:'#facc15'}}>Setup New Match</h3>
-          <input name="lg" placeholder="League Name" style={s.pInput} required />
-          <input name="gr" placeholder="Ground Name" style={s.pInput} required />
-          <input name="t1" placeholder="Batting Team" style={s.pInput} required />
-          <input name="t2" placeholder="Bowling Team" style={s.pInput} required />
-          <input name="overs" placeholder="Total Overs" type="number" style={s.pInput} required />
-          <button type="submit" style={s.goldBtn}>START LIVE MATCH</button>
-        </form>
+      {!match ? (
+        <div style={s.setupCard}>
+          <h3>New Match Setup</h3>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            set(ref(db, 'liveMatch'), {
+              lg: fd.get('lg'), t1: fd.get('t1'), t2: fd.get('t2'),
+              overs: fd.get('overs'), score: 0, wkts: 0, ov: 0, bl: 0, strike: 1, status: "LIVE"
+            });
+          }}>
+            <input name="lg" placeholder="League Name" style={s.mInput} required />
+            <input name="t1" placeholder="Team A (Batting)" style={s.mInput} required />
+            <input name="t2" placeholder="Team B (Bowling)" style={s.mInput} required />
+            <input name="overs" placeholder="Total Overs" type="number" style={s.mInput} required />
+            <button type="submit" style={s.goldBtn}>START MATCH</button>
+          </form>
+        </div>
       ) : (
-        match && (
-          <div style={s.dashboard}>
-            <div style={s.cbBox}>
-              <div style={{fontSize:'12px'}}>{match.lg} | {match.gr}</div>
-              <div style={s.score}>{match.score}/{match.wkts} <small>({match.ov}.{match.bl})</small></div>
-              <div style={{color:'#94a3b8'}}>{match.t1} vs {match.t2}</div>
-            </div>
-            {isAdmin && <button onClick={() => remove(ref(db, 'liveMatch'))} style={s.endBtn}>Finish Match</button>}
+        <div style={s.dashboard}>
+          <div style={s.scoreCard}>
+            <p style={s.lgName}>{match.lg}</p>
+            <h1 style={s.mainScore}>{match.score}/{match.wkts}</h1>
+            <p style={s.ovText}>Overs: {match.ov}.{match.bl} / {match.overs}</p>
+            <div style={s.teamsLine}>{match.t1} vs {match.t2}</div>
           </div>
-        )
+
+          {isAdmin && (
+            <div style={s.controls}>
+              <div style={s.grid}>
+                {[0, 1, 2, 3, 4, 6].map(r => (
+                  <button key={r} onClick={() => handleScore(r)} style={s.runBtn}>{r}</button>
+                ))}
+                <button onClick={() => handleScore(0, 'wd')} style={s.extraBtn}>WD</button>
+                <button onClick={() => handleScore(0, 'nb')} style={s.extraBtn}>NB</button>
+                <button onClick={() => handleScore(0, 'wkt')} style={s.wktBtn}>WKT</button>
+              </div>
+              <button onClick={() => remove(ref(db, 'liveMatch'))} style={s.endBtn}>Finish & Clear Match</button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
 const s = {
-  container: { background: '#0a0e1a', minHeight: '100vh', color: 'white', padding: '15px' },
+  container: { background: '#0a0e1a', minHeight: '100vh', color: 'white', fontFamily: 'sans-serif' },
   center: { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0e1a', color: '#facc15' },
-  authPage: { height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0a0e1a' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', borderBottom: '1px solid #1e293b' },
-  profile: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px' },
-  pInput: { padding: '12px', width: '80%', background: '#111827', border: '1px solid #334155', color: 'white', borderRadius: '8px', marginBottom: '10px' },
-  form: { marginTop: '20px', padding: '15px', background: '#111827', borderRadius: '12px' },
-  goldBtn: { width: '100%', padding: '15px', background: '#facc15', color: 'black', border: 'none', borderRadius: '8px', fontWeight: 'bold' },
-  dashboard: { marginTop: '20px' },
-  cbBox: { background: 'linear-gradient(180deg, #1e293b, #0a0e1a)', padding: '25px', borderRadius: '15px', textAlign: 'center', border: '1px solid #334155' },
-  score: { fontSize: '50px', fontWeight: 'bold', color: '#facc15' },
-  endBtn: { marginTop: '20px', width: '100%', padding: '10px', background: '#ef4444', border: 'none', borderRadius: '8px', color: 'white' },
-  lock: { background: '#334155', border: 'none', color: 'white', padding: '5px 10px', borderRadius: '5px' }
+  authPage: { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#050810' },
+  logoCard: { textAlign: 'center', background: '#111827', padding: '40px', borderRadius: '20px', border: '1px solid #1e293b', width: '80%' },
+  pInput: { padding: '12px', background: '#0a0e1a', border: '1px solid #facc15', color: 'white', borderRadius: '8px', textAlign: 'center', width: '100%' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', background: '#111827' },
+  waCircle: { background: '#25d366', border: 'none', borderRadius: '50%', width: '40px', height: '40px', color: 'white', fontSize: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  setupCard: { padding: '20px', margin: '20px', background: '#111827', borderRadius: '15px' },
+  mInput: { width: '100%', padding: '12px', marginBottom: '10px', background: '#1e293b', border: '1px solid #334155', color: 'white', borderRadius: '8px', boxSizing: 'border-box' },
+  goldBtn: { width: '100%', padding: '15px', background: '#facc15', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' },
+  scoreCard: { margin: '20px', padding: '30px', background: 'linear-gradient(180deg, #1e293b, #0a0e1a)', borderRadius: '20px', textAlign: 'center', border: '1px solid #334155' },
+  mainScore: { fontSize: '64px', margin: '10px 0', color: '#facc15' },
+  controls: { padding: '0 20px 20px' },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' },
+  runBtn: { padding: '20px', background: 'white', color: 'black', border: 'none', borderRadius: '10px', fontSize: '20px', fontWeight: 'bold' },
+  extraBtn: { padding: '20px', background: '#facc15', color: 'black', border: 'none', borderRadius: '10px', fontWeight: 'bold' },
+  wktBtn: { padding: '20px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 'bold' },
+  endBtn: { width: '100%', marginTop: '20px', padding: '12px', background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '8px' }
 };
