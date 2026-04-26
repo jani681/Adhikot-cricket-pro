@@ -11,17 +11,23 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getDatabase(app);
 
-export default function AdhikotProFixed() {
+export default function AdhikotProMasterFixed() {
   const [match, setMatch] = useState(null);
+  const [loading, setLoading] = useState(true); // Loading state to prevent blank screen
   const [isAdmin, setIsAdmin] = useState(false);
   const [selModal, setSelModal] = useState(null); 
   const [anim, setAnim] = useState("");
 
   useEffect(() => {
     const matchRef = ref(db, 'liveMatch');
-    return onValue(matchRef, (snap) => {
+    const unsubscribe = onValue(matchRef, (snap) => {
       setMatch(snap.val());
+      setLoading(false);
+    }, (error) => {
+      console.error(error);
+      setLoading(false);
     });
+    return () => unsubscribe();
   }, []);
 
   const triggerAnim = (txt) => { setAnim(txt); setTimeout(() => setAnim(""), 3000); };
@@ -32,11 +38,12 @@ export default function AdhikotProFixed() {
 
     if (type === 'wkt') {
         wkts += 1; bwr_w += 1; bl += 1;
-        active === 1 ? s1.r = "OUT" : s2.r = "OUT";
+        active === 1 ? (s1.r = "OUT") : (s2.r = "OUT");
         triggerAnim("OUT! ☝️");
     } else if (type === 'normal') {
         score += runs; bwr_r += runs; bl += 1;
-        active === 1 ? (s1.r += runs, s1.b += 1) : (s2.r += runs, s2.b += 1);
+        if (active === 1) { s1.r = (parseInt(s1.r) || 0) + runs; s1.b += 1; } 
+        else { s2.r = (parseInt(s2.r) || 0) + runs; s2.b += 1; }
         if (runs === 4) triggerAnim("FOUR! ✨");
         if (runs === 6) triggerAnim("SIXER! 🚀");
         if (runs === 1 || runs === 3) active = active === 1 ? 2 : 1;
@@ -48,7 +55,7 @@ export default function AdhikotProFixed() {
     if (bl === 6) { ov += 1; bl = 0; bwr_o += 1; active = active === 1 ? 2 : 1; triggerAnim("OVER! 🔄"); }
 
     let status = 'Live';
-    let result = '';
+    let result = match.result || '';
     if (innings === 1 && (ov >= maxOv || wkts >= 10)) { status = 'Innings Break'; target = score + 1; }
     else if (innings === 2) {
         if (score >= target) { status = 'Finished'; result = `${match.t2} WON! 🏆`; }
@@ -60,8 +67,8 @@ export default function AdhikotProFixed() {
 
   const manualSelect = (type, pData) => {
     const pArray = pData.split('-');
-    const name = pArray[0];
-    const phone = pArray[1] || "";
+    const name = pArray[0].trim();
+    const phone = pArray[1] ? pArray[1].trim() : "";
     
     if (type === 's1') update(ref(db, 'liveMatch'), { 's1/n': name, 's1/ph': phone, 's1/r': 0, 's1/b': 0, active: 1 });
     if (type === 's2') update(ref(db, 'liveMatch'), { 's2/n': name, 's2/ph': phone, 's2/r': 0, 's2/b': 0, active: 2 });
@@ -69,19 +76,21 @@ export default function AdhikotProFixed() {
     setSelModal(null);
   };
 
+  if (loading) return <div style={s.loader}>Adhikot Pro Loading...</div>;
+
   if (!isAdmin && !match) {
     return (
       <div style={s.container}>
         <div style={s.authBox}>
-          <FaUserShield size={50} color="#facc15" />
-          <h2 style={{color:'white', margin:'20px 0'}}>Adhikot Admin Panel</h2>
-          <input type="password" placeholder="Enter PIN" style={s.pinInput} onChange={(e) => e.target.value === "6545" && setIsAdmin(true)} />
+          <FaUserShield size={60} color="#facc15" />
+          <h2 style={{color:'white', margin:'20px 0'}}>Admin Login</h2>
+          <input type="password" placeholder="Enter PIN (6545)" style={s.pinInput} onChange={(e) => e.target.value === "6545" && setIsAdmin(true)} />
         </div>
       </div>
     );
   }
 
-  const currentRR = match ? (match.score / (match.ov + match.bl / 6) || 0).toFixed(2) : "0.00";
+  const currentRR = match ? (match.score / (match.ov + (match.bl / 6)) || 0).toFixed(2) : "0.00";
 
   return (
     <div style={s.container}>
@@ -93,13 +102,13 @@ export default function AdhikotProFixed() {
              <div style={s.avatar}>T</div>
              <div><b>Touqeer Iqbal</b><br/><span style={s.livePulse}><FaCircle size={7}/> LIVE</span></div>
            </div>
-           <a href="https://wa.me/923015800630" style={{color:'#22c55e'}}><FaWhatsapp size={24}/></a>
+           <a href="https://wa.me/923015800630" target="_blank" rel="noreferrer" style={{color:'#22c55e'}}><FaWhatsapp size={26}/></a>
         </div>
       </div>
 
       {!match ? (
         <div style={s.setupBox}>
-          <h3 style={{color:'#facc15'}}><FaTrophy/> New Match</h3>
+          <h3 style={{color:'#facc15'}}><FaTrophy/> New Match Setup</h3>
           <form onSubmit={(e) => {
             e.preventDefault();
             const fd = new FormData(e.target);
@@ -117,14 +126,14 @@ export default function AdhikotProFixed() {
             <div style={s.flexGap}><input name="t1" placeholder="Batting Team" style={s.input}/><input name="t2" placeholder="Bowling Team" style={s.input}/></div>
             <textarea name="t1p" placeholder="Batting Squad (Name-Number, Name-Number...)" style={s.area}/>
             <textarea name="t2p" placeholder="Bowling Squad (Name-Number, Name-Number...)" style={s.area}/>
-            <div style={s.flexGap}><input name="date" type="date" style={s.input}/><input name="max" placeholder="Total Overs" type="number" style={s.input}/></div>
+            <div style={s.flexGap}><input name="date" type="date" style={s.input}/><input name="max" placeholder="Overs" type="number" style={s.input}/></div>
             <button type="submit" style={s.goldBtn}>START LIVE</button>
           </form>
         </div>
       ) : (
         <div style={{padding:'10px'}}>
           <div style={s.card}>
-            <div style={{fontSize:'11px', opacity:0.6}}>{match.toss} | Ground: {match.gr}</div>
+            <div style={{fontSize:'12px', opacity:0.6}}>{match.toss || 'Match Started'} | {match.gr}</div>
             <div style={s.mainScore}>{match.score}/{match.wkts}</div>
             <div style={s.overInfo}>{match.ov}.{match.bl} / {match.maxOv}</div>
             <div style={s.rrBox}>Run Rate: {currentRR}</div>
@@ -135,24 +144,24 @@ export default function AdhikotProFixed() {
           <div style={s.playerCard}>
              <div style={match.active === 1 ? s.activeP : s.pRow} onClick={() => setSelModal('s1')}>
                 <div style={s.flex}>
-                    <span>{match.s1.n}*</span>
-                    {match.s1.ph && <FaWhatsapp color="#22c55e" size={12}/>}
+                    <span>{match.s1?.n || 'Select'}*</span>
+                    {match.s1?.ph && <FaWhatsapp color="#22c55e" size={12}/>}
                     <FaSyncAlt size={10} style={{opacity:0.4}}/>
                 </div>
-                <span>{match.s1.r}({match.s1.b})</span>
+                <span>{match.s1?.r}({match.s1?.b})</span>
              </div>
              <div style={match.active === 2 ? s.activeP : s.pRow} onClick={() => setSelModal('s2')}>
                 <div style={s.flex}>
-                    <span>{match.s2.n}</span>
-                    {match.s2.ph && <FaWhatsapp color="#22c55e" size={12}/>}
+                    <span>{match.s2?.n || 'Select'}</span>
+                    {match.s2?.ph && <FaWhatsapp color="#22c55e" size={12}/>}
                     <FaSyncAlt size={10} style={{opacity:0.4}}/>
                 </div>
-                <span>{match.s2.r}({match.s2.b})</span>
+                <span>{match.s2?.r}({match.s2?.b})</span>
              </div>
              <div style={s.divider}></div>
              <div style={s.pRow} onClick={() => setSelModal('bwr')}>
                 <div style={s.flex}>
-                    <span style={{color:'#60a5fa'}}>{match.bwr}</span>
+                    <span style={{color:'#60a5fa'}}>{match.bwr || 'Select'}</span>
                     {match.bwr_ph && <FaWhatsapp color="#22c55e" size={12}/>}
                     <FaSyncAlt size={10} style={{opacity:0.4}}/>
                 </div>
@@ -179,11 +188,11 @@ export default function AdhikotProFixed() {
       {selModal && (
         <div style={s.overlay} onClick={() => setSelModal(null)}>
            <div style={s.modal} onClick={e => e.stopPropagation()}>
-              <h3 style={{marginBottom:'15px'}}>Select {selModal === 'bwr' ? 'Bowler' : 'Player'}</h3>
-              {(selModal === 'bwr' ? match.t2p : match.t1p).map(p => (
-                <div key={p} style={s.pItem} onClick={() => manualSelect(selModal, p)}>
+              <h3 style={{marginBottom:'15px'}}>Select {selModal === 'bwr' ? 'Bowler' : 'Batsman'}</h3>
+              {(selModal === 'bwr' ? (match.t2p || []) : (match.t1p || [])).map((p, i) => (
+                <div key={i} style={s.pItem} onClick={() => manualSelect(selModal, p)}>
                   <span>{p.split('-')[0]}</span>
-                  <FaWhatsapp size={18} color="#22c55e" />
+                  <FaWhatsapp size={20} color="#22c55e" />
                 </div>
               ))}
            </div>
@@ -194,6 +203,7 @@ export default function AdhikotProFixed() {
 }
 
 const s = {
+  loader: { background:'#020617', color:'#facc15', height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'20px', fontWeight:'bold' },
   container: { background: '#020617', minHeight: '100vh', color: 'white', fontFamily: 'sans-serif' },
   authBox: { textAlign:'center', paddingTop:'150px' },
   pinInput: { padding:'15px', background:'#0f172a', border:'2px solid #facc15', color:'white', borderRadius:'10px', width:'70%', textAlign:'center' },
@@ -209,7 +219,7 @@ const s = {
   card: { background:'#0f172a', padding:'25px', borderRadius:'20px', textAlign:'center', border:'1px solid #1e293b', margin:'10px' },
   mainScore: { fontSize:'60px', fontWeight:'bold', color:'#facc15', margin:'5px 0' },
   overInfo: { fontSize:'18px', opacity:0.8 },
-  rrBox: { marginTop:'10px', fontSize:'14px', color:'#facc15', background:'rgba(250,204,21,0.1)', display:'inline-block', padding:'5px 15px', borderRadius:'20px' },
+  rrBox: { marginTop:'10px', color:'#facc15', background:'rgba(250,204,21,0.1)', padding:'5px 15px', borderRadius:'20px', fontSize:'14px' },
   targetBox: { color:'#facc15', fontWeight:'bold', fontSize:'22px', marginTop:'15px' },
   resultBox: { background:'#22c55e', padding:'10px', borderRadius:'10px', marginTop:'15px', fontWeight:'bold' },
   playerCard: { background:'#0f172a', margin:'15px', padding:'15px', borderRadius:'15px' },
