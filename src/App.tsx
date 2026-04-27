@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps } from "firebase/app";
 import { getDatabase, ref, set, onValue, update, remove, push } from "firebase/database";
-import { FaWhatsapp, FaSyncAlt, FaUserShield, FaTrophy, FaTrash, FaSave, FaPlay, FaCog, FaTimes, FaHistory, FaEdit, FaCommentDots, FaPaperPlane } from 'react-icons/fa';
+import { FaWhatsapp, FaSyncAlt, FaUserShield, FaTrophy, FaTrash, FaSave, FaPlay, FaCog, FaTimes, FaHistory, FaEdit, FaCommentDots, FaPaperPlane, FaGlobe } from 'react-icons/fa';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB0e37uvyY7Jpuj-FYxDlX52hjb0uwsBfg",
@@ -78,7 +78,6 @@ export default function AdhikotProAdvanced() {
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
-  // FIX: Ball and Over Logic without changing structure
   const handleScore = (runs, type = 'normal', outType = null) => {
     if (!match || match.status !== 'Live' || !isAdmin) return;
     setLastState({...match}); 
@@ -87,7 +86,7 @@ export default function AdhikotProAdvanced() {
 
     if (type === 'normal') {
       data.score += runs; data.bwr_r += runs; 
-      data.bl += 1; // Increment ball
+      data.bl += 1; 
       striker.r = (parseInt(striker.r) || 0) + runs; striker.b += 1;
       if (runs === 4) { striker.fours += 1; triggerAnim("FOUR! ✨"); postCommentary(`${striker.n} hits a FOUR! ✨`); }
       else if (runs === 6) { striker.sixes += 1; triggerAnim("SIXER! 🚀"); postCommentary(`${striker.n} hits a massive SIX! 🚀`); }
@@ -105,11 +104,6 @@ export default function AdhikotProAdvanced() {
 
     if (outType) {
       data.wkts += 1; data.bwr_w += (outType !== 'Run Out' ? 1 : 0);
-      if (type === 'normal') {
-         // Ball is already incremented above, no need to add again
-      } else {
-         // If out on extra (rare but for structure), handle here
-      }
       const outName = striker.n;
       striker.r = `OUT (${outType})`;
       triggerAnim(`WICKET! (${outType}) ☝️`);
@@ -117,19 +111,17 @@ export default function AdhikotProAdvanced() {
       if (data.wkts < 10) setTimeout(() => setSelModal(data.active === 1 ? 's1' : 's2'), 500);
     }
 
-    // Rotate strike
     if (runs % 2 !== 0 && type !== 'wd') data.active = data.active === 1 ? 2 : 1;
 
-    // OVER CHANGE SYSTEM
     if (data.bl === 6) { 
       data.ov += 1; 
       data.bl = 0; 
       data.bwr_o += 1; 
-      data.active = data.active === 1 ? 2 : 1; // Auto rotate on over end
+      data.active = data.active === 1 ? 2 : 1; 
       triggerAnim("OVER! 🔄");
       postCommentary(`End of over ${data.ov}. Score: ${data.score}/${data.wkts}`);
       if (data.ov < data.maxOv && data.wkts < 10) {
-        setTimeout(() => setSelModal('bwr'), 600); // Trigger New Bowler Modal
+        setTimeout(() => setSelModal('bwr'), 600); 
       }
     }
 
@@ -206,6 +198,16 @@ export default function AdhikotProAdvanced() {
            </div>
       </div></div>
 
+      {/* NEW INTERNATIONAL SCORE BUTTON - Zero disturbance to structure */}
+      <div style={{padding: '0 15px'}}>
+        <button 
+          onClick={() => window.open('https://www.cricbuzz.com/cricket-match/live-scores', '_blank')}
+          style={s.interBtn}
+        >
+          <FaGlobe style={{marginRight: '8px'}}/> INTERNATIONAL LIVE SCORES
+        </button>
+      </div>
+
       <style>{`
         .blink { animation: blinker 1.5s linear infinite; }
         @keyframes blinker { 50% { opacity: 0.3; } }
@@ -251,12 +253,12 @@ export default function AdhikotProAdvanced() {
               <form onSubmit={(e) => {
                 e.preventDefault();
                 const fd = new FormData(e.target);
-                const t1 = fd.get('t1'), t2 = fd.get('t2'), batFirst = fd.get('batFirst');
                 set(ref(db, 'liveMatch'), {
-                  lg: fd.get('lg'), t1, t2, c1: fd.get('c1'), c2: fd.get('c2'), 
+                  lg: fd.get('lg'), t1: fd.get('t1'), t2: fd.get('t2'), c1: fd.get('c1'), c2: fd.get('c2'), 
                   emp: fd.get('emp'), date: fd.get('date'), time: fd.get('time'), maxOv: parseInt(fd.get('max')),
                   t1p: fd.get('t1p').split(','), t2p: fd.get('t2p').split(','),
-                  batTeam: batFirst === 'T1' ? t1 : t2, bowlTeam: batFirst === 'T1' ? t2 : t1,
+                  batTeam: fd.get('batFirst') === 'T1' ? fd.get('t1') : fd.get('t2'), 
+                  bowlTeam: fd.get('batFirst') === 'T1' ? fd.get('t2') : fd.get('t1'),
                   s1: {n: 'Striker', r: 0, b: 0, fours: 0, sixes: 0}, s2: {n: 'Non-Striker', r: 0, b: 0, fours: 0, sixes: 0}, 
                   active: 1, score: 0, wkts: 0, ov: 0, bl: 0, innings: 1, status: 'Live', bwr: 'Bowler', bwr_r:0, bwr_w:0, bwr_o:0,
                   commentary: ["Match Started! Welcome to Adhikot Cricket Pro."]
@@ -277,10 +279,10 @@ export default function AdhikotProAdvanced() {
               </form>
             </>
           ) : (
-            <div style={{textAlign:'center', padding:'20px'}}>
+            <div style={{textAlign:'center', padding:'40px 20px'}}>
               <FaTrophy size={40} color="#facc15" />
-              <h3 style={{marginTop:'15px'}}>Waiting for Match...</h3>
-              <p style={{opacity:0.6}}>Live score will appear here once the match starts.</p>
+              <h3 style={{marginTop:'15px'}}>No Local Match Live</h3>
+              <p style={{opacity:0.6, fontSize:'14px'}}>Check World Cricket scores above or wait for local match setup.</p>
             </div>
           )}
         </div>
@@ -295,7 +297,6 @@ export default function AdhikotProAdvanced() {
                  <div style={s.divider}></div>
                  <div style={s.flexBetween}><span>Final Score:</span> <b style={{color:'#facc15', fontSize:'20px'}}>{match.score}/{match.wkts}</b></div>
                  <div style={s.flexBetween}><span>Overs:</span> <b>{match.ov}.{match.bl}</b></div>
-                 <div style={s.divider}></div>
               </div>
             ) : (
               <>
@@ -314,7 +315,7 @@ export default function AdhikotProAdvanced() {
 
           <div style={{...s.commBox, display:'flex', flexDirection:'column'}}>
             <div style={{color:'#facc15', fontSize:'12px', marginBottom:'5px', fontWeight:'bold'}}><FaCommentDots/> LIVE COMMENTARY</div>
-            <div style={{display:'flex', flexDirection:'column'}}>
+            <div>
                 {match.commentary?.map((c, i) => (
                 <div key={i} style={{...s.commItem, opacity: i === 0 ? 1 : 0.6}}>
                     {i === 0 && <span style={s.newDot}></span>} {c}
@@ -375,14 +376,15 @@ export default function AdhikotProAdvanced() {
 
       {extraModal && <div style={s.overlay}><div style={s.modal}><h3>Extras</h3><div style={s.grid3}>{[0,1,2,3,4,6].map(v => <button key={v} onClick={()=>handleScore(v, extraModal)} style={s.numBtn}>+{v}</button>)}<button onClick={()=>setExtraModal(null)} style={s.delBtn}>CLOSE</button></div></div></div>}
       {wktModal && <div style={s.overlay}><div style={s.modal}><h3>Dismissal</h3>{['Bold', 'Caught', 'Run Out', 'LBW', 'Stumped'].map(t => (<button key={t} onClick={()=>handleScore(0, 'normal', t)} style={s.pItem}>{t}</button>))}<button onClick={()=>setWktModal(false)} style={s.delBtn}>CANCEL</button></div></div>}
-      {isAdmin && selModal && <div style={s.overlay} onClick={() => setSelModal(null)}><div style={s.modal} onClick={e => e.stopPropagation()}><h3>Select Player</h3><div style={{maxHeight: '300px', overflowY: 'auto'}}>{(selModal === 'bwr' ? (match.batTeam === match.t1 ? match.t2p : match.t1p) : (match.batTeam === match.t1 ? match.t1p : match.t2p)).map((p, i) => (<div key={i} style={s.pItem} onClick={() => { const up = {}; if(selModal==='s1') up.s1 = {n:p, r:0, b:0, fours:0, sixes:0}; if(selModal==='s2') up.s2 = {n:p, r:0, b:0, fours:0, sixes:0}; if(selModal==='bwr') { up.bwr = p; up.bwr_r = 0; up.bwr_w = 0; up.bwr_o = match.ov; } update(ref(db, 'liveMatch'), up); setSelModal(null); }}>{p}</div>))}</div></div></div>}
+      {isAdmin && selModal && <div style={s.overlay} onClick={() => setSelModal(null)}><div style={s.modal} onClick={e => e.stopPropagation()}><h3>Select Player</h3><div style={{maxHeight: '300px', overflowY: 'auto'}}>{(selModal === 'bwr' ? (match.batTeam === (match.t1) ? match.t2p : match.t1p) : (match.batTeam === match.t1 ? match.t1p : match.t2p)).map((p, i) => (<div key={i} style={s.pItem} onClick={() => { const up = {}; if(selModal==='s1') up.s1 = {n:p, r:0, b:0, fours:0, sixes:0}; if(selModal==='s2') up.s2 = {n:p, r:0, b:0, fours:0, sixes:0}; if(selModal==='bwr') { up.bwr = p; up.bwr_r = 0; up.bwr_w = 0; up.bwr_o = match.ov; } update(ref(db, 'liveMatch'), up); setSelModal(null); }}>{p}</div>))}</div></div></div>}
     </div>
   );
 }
 
 const s = {
   container: { background: '#020617', minHeight: '100vh', color: 'white', fontFamily: 'sans-serif' },
-  header: { background:'#0f172a', padding:'15px', borderBottom:'1px solid #1e293b' },
+  header: { background:'#0f172a', padding:'15px', borderBottom:'1px solid #1e293b', marginBottom: '10px' },
+  interBtn: { width: '100%', padding: '12px', background: 'linear-gradient(90deg, #1e293b, #334155)', color: '#facc15', border: '1px solid #facc15', borderRadius: '12px', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 15px rgba(250, 204, 21, 0.1)' },
   flex: { display:'flex', alignItems:'center', gap:'10px' },
   flexBetween: { display:'flex', alignItems:'center', justifyContent:'space-between' },
   avatar: { width:'35px', height:'35px', background:'#facc15', borderRadius:'50%', color:'black', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold' },
@@ -404,7 +406,7 @@ const s = {
   divider: { height:'1px', background:'#334155', margin:'10px 0' },
   adminGrid: { display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'8px', padding:'10px' },
   grid3: { display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'10px' },
-  numBtn: { padding:'15px', background:'white', color:'black', borderRadius:'10px', fontWeight:'bold', border:'none', transition:'0.2s' },
+  numBtn: { padding:'15px', background:'white', color:'black', borderRadius:'10px', fontWeight:'bold', border:'none' },
   exBtn: { padding:'15px', background:'#fb923c', color:'white', borderRadius:'10px', fontWeight:'bold', border:'none' },
   nbBtn: { padding:'15px', background:'#8b5cf6', color:'white', borderRadius:'10px', fontWeight:'bold', border:'none' },
   wktBtn: { padding:'15px', background:'#ef4444', color:'white', borderRadius:'10px', fontWeight:'bold', border:'none' },
