@@ -73,9 +73,6 @@ export default function AdhikotProAdvanced() {
     let data = { ...match };
     let striker = data.active === 1 ? data.s1 : data.s2;
 
-    // Ball valid hai ya nahi (Wide/NB par over nahi barhta)
-    const isLegalBall = (type === 'normal');
-
     if (type === 'normal') {
       data.score += runs; data.bwr_r += runs; data.bl += 1;
       striker.r = (parseInt(striker.r) || 0) + runs; striker.b += 1;
@@ -95,7 +92,7 @@ export default function AdhikotProAdvanced() {
 
     if (outType) {
       data.wkts += 1; data.bwr_w += (outType !== 'Run Out' ? 1 : 0);
-      if (isLegalBall) data.bl += 1;
+      if (type === 'normal') data.bl += 1;
       const outName = striker.n;
       striker.r = `OUT (${outType})`;
       triggerAnim(`WICKET! (${outType}) ☝️`);
@@ -103,13 +100,10 @@ export default function AdhikotProAdvanced() {
       setTimeout(() => setSelModal(data.active === 1 ? 's1' : 's2'), 500);
     }
 
-    // Strike rotation logic
     if (runs % 2 !== 0 && type !== 'wd') data.active = data.active === 1 ? 2 : 1;
     
-    // Over Completion Logic
     if (data.bl === 6) { 
-      data.ov += 1; data.bl = 0; data.bwr_o += 1; 
-      data.active = data.active === 1 ? 2 : 1; // End of over strike rotation
+      data.ov += 1; data.bl = 0; data.bwr_o += 1; data.active = data.active === 1 ? 2 : 1; 
       triggerAnim("OVER! 🔄");
       postCommentary(`End of over ${data.ov}. Score is ${data.score} for ${data.wkts}`);
       setTimeout(() => setSelModal('bwr'), 600);
@@ -125,6 +119,21 @@ export default function AdhikotProAdvanced() {
 
     update(ref(db, 'liveMatch'), data);
     setExtraModal(null); setWktModal(false);
+  };
+
+  const endMatchManually = () => {
+    if (!match) return;
+    if (window.confirm("Do you want to end this match now?")) {
+      let data = { ...match };
+      data.status = 'Finished';
+      if (data.innings === 1) {
+        data.winner = "No Result";
+      } else {
+        data.winner = data.score >= data.target ? data.batTeam : data.bowlTeam;
+      }
+      postCommentary("Match ended by Administrator.");
+      update(ref(db, 'liveMatch'), data);
+    }
   };
 
   const undoLastAction = () => {
@@ -301,6 +310,8 @@ export default function AdhikotProAdvanced() {
                   
                   <button onClick={undoLastAction} style={s.editBtn}><FaEdit/> EDIT</button>
                   <button onClick={shareToWhatsApp} style={s.waBtn}><FaWhatsapp size={20}/> SHARE</button>
+                  {/* Manual Match End Button */}
+                  <button onClick={endMatchManually} style={s.delBtn}><FaTimes/> END MATCH</button>
                 </>
               )}
               
