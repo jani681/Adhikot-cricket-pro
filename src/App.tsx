@@ -81,7 +81,16 @@ export default function AdhikotProAdvanced() {
     }
 
     if (runs % 2 !== 0 && type !== 'wd') data.active = data.active === 1 ? 2 : 1;
-    if (data.bl === 6) { data.ov += 1; data.bl = 0; data.bwr_o += 1; data.active = data.active === 1 ? 2 : 1; triggerAnim("OVER! 🔄"); }
+    
+    // NEW LOGIC: Trigger manual bowler selection on over completion
+    if (data.bl === 6) { 
+      data.ov += 1; 
+      data.bl = 0; 
+      data.bwr_o += 1; 
+      data.active = data.active === 1 ? 2 : 1; 
+      triggerAnim("OVER! 🔄");
+      setTimeout(() => setSelModal('bwr'), 600); // Opens bowler popup
+    }
     
     if (data.innings === 2 && data.score >= data.target) {
       data.status = 'Finished';
@@ -177,13 +186,11 @@ export default function AdhikotProAdvanced() {
             });
           }}>
             <input name="lg" placeholder="League Name" style={s.input} required />
-            
             <div style={s.flexGap}>
               <input name="date" type="date" style={s.input} />
               <input name="time" type="time" style={s.input} />
             </div>
             <input name="emp" placeholder="Umpire Name" style={s.input} />
-
             <div style={s.flexGap}><input name="t1" placeholder="Team A" style={s.input}/><input name="c1" placeholder="Capt A" style={s.input}/></div>
             <div style={s.flexGap}><input name="t2" placeholder="Team B" style={s.input}/><input name="c2" placeholder="Capt B" style={s.input}/></div>
             <select name="batFirst" style={s.input} required>
@@ -199,7 +206,9 @@ export default function AdhikotProAdvanced() {
         <div style={{padding:'10px'}}>
           <div style={s.card}>
             {match.status === 'Finished' && <div style={s.winBanner}>{match.winner} WON! 🏆</div>}
-            <div style={{fontSize:'16px', fontWeight:'bold'}}>{match.batTeam} vs {match.bowlTeam}</div>
+            {/* UPDATED: Batting Team Name on Scoreboard */}
+            <div style={{fontSize:'14px', fontWeight:'bold', color: '#facc15', marginBottom: '5px', textTransform: 'uppercase'}}>{match.batTeam} BATTING</div>
+            <div style={{fontSize:'16px', fontWeight:'bold', opacity: 0.8}}>{match.batTeam} vs {match.bowlTeam}</div>
             <div style={s.mainScore}>{match.score}/{match.wkts}</div>
             <div style={s.overInfo}>Overs: {match.ov}.{match.bl} / {match.maxOv}</div>
             {match.target > 0 && <div style={s.targetBox}>Target: {match.target}</div>}
@@ -251,7 +260,7 @@ export default function AdhikotProAdvanced() {
               
               <div style={{gridColumn:'span 3', display:'flex', gap:'10px', marginTop:'10px'}}>
                 {match.status === 'Innings Break' && (
-                  <button onClick={() => update(ref(db, 'liveMatch'), {innings: 2, score: 0, wkts: 0, ov: 0, bl: 0, target: match.score + 1, status: 'Live', batTeam: match.bowlTeam, bowlTeam: match.batTeam})} style={s.saveBtn}>START 2ND INN</button>
+                  <button onClick={() => update(ref(db, 'liveMatch'), {innings: 2, score: 0, wkts: 0, ov: 0, bl: 0, target: match.score + 1, status: 'Live', batTeam: match.bowlTeam, bowlTeam: match.batTeam, bwr_r:0, bwr_w:0, bwr_o:0, bwr:'Bowler'})} style={s.saveBtn}>START 2ND INN</button>
                 )}
                 <button onClick={saveMatchToHistory} style={s.saveBtn}><FaSave/> SAVE</button>
                 {match.status === 'Finished' && (
@@ -286,15 +295,22 @@ export default function AdhikotProAdvanced() {
       {isAdmin && selModal && (
         <div style={s.overlay} onClick={() => setSelModal(null)}><div style={s.modal} onClick={e => e.stopPropagation()}>
           <h3>Select {selModal === 'bwr' ? 'Bowler' : 'Batsman'}</h3>
+          <div style={{maxHeight: '300px', overflowY: 'auto'}}>
           {(selModal === 'bwr' ? (match.batTeam === match.t1 ? match.t2p : match.t1p) : (match.batTeam === match.t1 ? match.t1p : match.t2p)).map((p, i) => (
             <div key={i} style={s.pItem} onClick={() => {
                 const up = {};
                 if(selModal==='s1') up.s1 = {n:p, r:0, b:0, fours:0, sixes:0};
                 if(selModal==='s2') up.s2 = {n:p, r:0, b:0, fours:0, sixes:0};
-                if(selModal==='bwr') up.bwr = p;
+                if(selModal==='bwr') {
+                   up.bwr = p;
+                   up.bwr_r = 0;
+                   up.bwr_w = 0;
+                   up.bwr_o = match.bl === 0 ? match.ov : match.ov; // Reset current bwr stats for new bwr
+                }
                 update(ref(db, 'liveMatch'), up); setSelModal(null);
             }}>{p}</div>
           ))}
+          </div>
         </div></div>
       )}
     </div>
