@@ -177,6 +177,13 @@ export default function AdhikotProAdvanced() {
             });
           }}>
             <input name="lg" placeholder="League Name" style={s.input} required />
+            
+            <div style={s.flexGap}>
+              <input name="date" type="date" style={s.input} />
+              <input name="time" type="time" style={s.input} />
+            </div>
+            <input name="emp" placeholder="Umpire Name" style={s.input} />
+
             <div style={s.flexGap}><input name="t1" placeholder="Team A" style={s.input}/><input name="c1" placeholder="Capt A" style={s.input}/></div>
             <div style={s.flexGap}><input name="t2" placeholder="Team B" style={s.input}/><input name="c2" placeholder="Capt B" style={s.input}/></div>
             <select name="batFirst" style={s.input} required>
@@ -198,7 +205,6 @@ export default function AdhikotProAdvanced() {
             {match.target > 0 && <div style={s.targetBox}>Target: {match.target}</div>}
           </div>
 
-          {/* UPDATED PLAYER CARD SECTION */}
           <div style={s.playerCard}>
              <div style={{...s.pRow, borderBottom:'1px solid #334155', paddingBottom:'5px', marginBottom:'5px', opacity:0.5, fontSize:'12px'}}>
                 <span style={{flex:2}}>BATSMAN</span>
@@ -230,7 +236,6 @@ export default function AdhikotProAdvanced() {
                 <span style={{flex:0.5, textAlign:'right'}}>{match.bwr_w || 0}</span>
              </div>
           </div>
-          {/* END OF UPDATED SECTION */}
 
           {isAdmin && (
             <div style={s.adminGrid}>
