@@ -59,10 +59,23 @@ export default function AdhikotProAdvanced() {
     setCommInput("");
   };
 
+  // IMPROVEMENT 2: Professional WhatsApp Sharing
   const shareToWhatsApp = () => {
     if (!match) return;
-    const lastComm = match.commentary ? `\n*Last Action:* ${match.commentary[0]}` : "";
-    const msg = `🏏 *LIVE MATCH UPDATE* 🏏\n\n*${match.batTeam} vs ${match.bowlTeam}*\nScore: ${match.score}/${match.wkts}\nOvers: ${match.ov}.${match.bl} / ${match.maxOv}${lastComm}\n\nShared via Adhikot Cricket Pro`;
+    const totalBalls = (match.ov * 6) + match.bl;
+    const crr = totalBalls > 0 ? ((match.score / totalBalls) * 6).toFixed(2) : "0.00";
+    const lastComm = match.commentary ? `\n💬 *Last Action:* ${match.commentary[0]}` : "";
+    
+    let msg = `🏏 *LIVE CRICKET UPDATE* 🏏\n\n`;
+    msg += `🏆 *${match.lg}*\n`;
+    msg += `⚔️ *${match.t1}* vs *${match.t2}*\n\n`;
+    msg += `🔴 *LIVE:* ${match.batTeam} batting\n`;
+    msg += `📊 *Score:* ${match.score}/${match.wkts}\n`;
+    msg += `⏳ *Overs:* ${match.ov}.${match.bl} (${match.maxOv})\n`;
+    msg += `📈 *CRR:* ${crr}\n`;
+    if(match.target > 0) msg += `🎯 *Target:* ${match.target}\n`;
+    msg += `${lastComm}\n\n📲 *Shared via Adhikot Cricket Pro*`;
+    
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
@@ -152,6 +165,23 @@ export default function AdhikotProAdvanced() {
     }
   };
 
+  // Helper for CRR/RRR Calculation
+  const calculateRates = () => {
+    if(!match) return {crr: "0.00", rrr: "0.00"};
+    const totalBallsPlayed = (match.ov * 6) + match.bl;
+    const crr = totalBallsPlayed > 0 ? ((match.score / totalBallsPlayed) * 6).toFixed(2) : "0.00";
+    
+    let rrr = "0.00";
+    if (match.innings === 2 && match.status === 'Live') {
+      const ballsLeft = (match.maxOv * 6) - totalBallsPlayed;
+      const runsNeeded = match.target - match.score;
+      rrr = ballsLeft > 0 ? ((runsNeeded / ballsLeft) * 6).toFixed(2) : "0.00";
+    }
+    return {crr, rrr};
+  };
+
+  const rates = calculateRates();
+
   return (
     <div style={s.container}>
       {anim && <div style={s.bigAnim}>{anim}</div>}
@@ -159,13 +189,18 @@ export default function AdhikotProAdvanced() {
       <div style={s.header}><div style={s.flexBetween}>
            <div style={s.flex} onClick={() => setShowAuth(true)}>
              <div style={s.avatar}>T</div>
-             <div><b>Touqeer Iqbal</b><br/><small style={{color: isAdmin ? '#22c55e' : '#ef4444'}}>● {isAdmin ? 'ADMIN ACTIVE' : 'LIVE'}</small></div>
+             <div><b>Touqeer Iqbal</b><br/><small className="blink" style={{color: isAdmin ? '#22c55e' : '#ef4444'}}>● {isAdmin ? 'ADMIN ACTIVE' : 'LIVE'}</small></div>
            </div>
            <div style={s.flex}>
              <FaHistory size={20} style={{cursor:'pointer', color:'#facc15'}} onClick={() => setShowHistory(true)} />
              <FaCog size={20} style={{opacity:0.5, marginLeft:'15px'}} onClick={() => setShowAuth(true)} />
            </div>
       </div></div>
+
+      <style>{`
+        .blink { animation: blinker 1.5s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.3; } }
+      `}</style>
 
       {showAuth && !isAdmin && (
         <div style={s.overlay} onClick={() => setShowAuth(false)}>
@@ -255,10 +290,17 @@ export default function AdhikotProAdvanced() {
               </div>
             ) : (
               <>
-                <div style={{fontSize:'14px', fontWeight:'bold', color: '#facc15', marginBottom: '5px', textTransform: 'uppercase'}}>{match.batTeam} {match.status === 'Innings Break' ? 'INNINGS OVER' : 'BATTING'}</div>
+                <div style={{fontSize:'12px', fontWeight:'bold', color: '#facc15', marginBottom: '5px'}}>{match.lg}</div>
                 <div style={{fontSize:'16px', fontWeight:'bold', opacity: 0.8}}>{match.batTeam} vs {match.bowlTeam}</div>
                 <div style={s.mainScore}>{match.score}/{match.wkts}</div>
                 <div style={s.overInfo}>Overs: {match.ov}.{match.bl} / {match.maxOv}</div>
+                
+                {/* IMPROVEMENT 1: Run Rate Display */}
+                <div style={{display:'flex', justifyContent:'center', gap:'15px', marginTop:'10px'}}>
+                   <div style={s.rateBadge}>CRR: {rates.crr}</div>
+                   {match.innings === 2 && <div style={{...s.rateBadge, background:'#ef4444'}}>RRR: {rates.rrr}</div>}
+                </div>
+
                 {match.target > 0 && <div style={s.targetBox}>Target: {match.target}</div>}
               </>
             )}
@@ -292,7 +334,6 @@ export default function AdhikotProAdvanced() {
             </div>
           )}
 
-          {/* ADMIN CONTROLS: Only visible to Admin */}
           {isAdmin && (
             <div style={s.adminGrid}>
               {match.status === 'Live' && (
@@ -408,5 +449,6 @@ const s = {
   bigAnim: { position:'fixed', top:'40%', left:'50%', transform:'translateX(-50%)', background:'#facc15', color:'black', padding:'15px 30px', borderRadius:'50px', fontWeight:'bold', zIndex:6000 },
   pinInput: { padding:'15px', background:'#0f172a', border:'2px solid #facc15', color:'white', borderRadius:'10px', textAlign:'center' },
   overInfo: { fontSize:'18px', opacity:0.8 },
-  fullScoreboard: { padding: '10px' }
+  fullScoreboard: { padding: '10px' },
+  rateBadge: { background:'#1e293b', color:'#facc15', padding:'4px 10px', borderRadius:'5px', fontSize:'12px', border:'1px solid #334155', fontWeight:'bold' }
 };
