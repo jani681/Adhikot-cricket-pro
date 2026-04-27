@@ -29,14 +29,16 @@ export default function AdhikotProAdvanced() {
     onValue(matchRef, (snap) => {
       const data = snap.val();
       if (data) {
-        if (data.innings === 2 && data.score >= data.target) {
-          data.status = 'Finished';
-          data.winner = data.batTeam;
-        } else if (data.ov >= data.maxOv || data.wkts >= 10) {
-          if (data.innings === 1) data.status = 'Innings Break';
-          else {
-             data.status = 'Finished';
-             data.winner = data.score < data.target - 1 ? data.bowlTeam : 'Tie';
+        // Logic to check if match or innings should end based on overs or wickets
+        if (data.status === 'Live') {
+          if (data.innings === 2 && data.score >= data.target) {
+            data.status = 'Finished';
+            data.winner = data.batTeam;
+          } else if (data.ov >= data.maxOv || data.wkts >= 10) {
+            data.status = data.innings === 1 ? 'Innings Break' : 'Finished';
+            if (data.status === 'Finished' && !data.winner) {
+              data.winner = data.score < data.target - 1 ? data.bowlTeam : (data.score === data.target - 1 ? 'Tie' : data.batTeam);
+            }
           }
         }
         setMatch(data);
@@ -66,8 +68,7 @@ export default function AdhikotProAdvanced() {
   };
 
   const handleScore = (runs, type = 'normal', outType = null) => {
-    if (!match || match.status === 'Finished' || match.status === 'Innings Break') return;
-    if (match.ov >= match.maxOv || match.wkts >= 10) return;
+    if (!match || match.status !== 'Live') return;
 
     setLastState({...match}); 
     let data = { ...match };
@@ -97,24 +98,25 @@ export default function AdhikotProAdvanced() {
       striker.r = `OUT (${outType})`;
       triggerAnim(`WICKET! (${outType}) ☝️`);
       postCommentary(`WICKET! ${outName} is OUT by ${outType}. ☝️`);
-      setTimeout(() => setSelModal(data.active === 1 ? 's1' : 's2'), 500);
+      if (data.wkts < 10) setTimeout(() => setSelModal(data.active === 1 ? 's1' : 's2'), 500);
     }
 
     if (runs % 2 !== 0 && type !== 'wd') data.active = data.active === 1 ? 2 : 1;
     
+    // Overs Logic: 6 balls complete an over
     if (data.bl === 6) { 
       data.ov += 1; data.bl = 0; data.bwr_o += 1; data.active = data.active === 1 ? 2 : 1; 
       triggerAnim("OVER! 🔄");
-      postCommentary(`End of over ${data.ov}. Score is ${data.score} for ${data.wkts}`);
-      setTimeout(() => setSelModal('bwr'), 600);
+      postCommentary(`End of over ${data.ov}. Score: ${data.score}/${data.wkts}`);
+      if (data.ov < data.maxOv) setTimeout(() => setSelModal('bwr'), 600);
     }
     
+    // Final check for Innings or Match End
     if (data.innings === 2 && data.score >= data.target) {
       data.status = 'Finished';
-      postCommentary(`Match Finished! ${data.batTeam} won! 🏆`);
+      data.winner = data.batTeam;
     } else if (data.ov >= data.maxOv || data.wkts >= 10) {
       data.status = data.innings === 1 ? 'Innings Break' : 'Finished';
-      if(data.status === 'Finished') postCommentary(`Match Finished! ${data.score < data.target - 1 ? data.bowlTeam : 'Tie'}`);
     }
 
     update(ref(db, 'liveMatch'), data);
@@ -126,11 +128,7 @@ export default function AdhikotProAdvanced() {
     if (window.confirm("Do you want to end this match now?")) {
       let data = { ...match };
       data.status = 'Finished';
-      if (data.innings === 1) {
-        data.winner = "No Result";
-      } else {
-        data.winner = data.score >= data.target ? data.batTeam : data.bowlTeam;
-      }
+      data.winner = data.innings === 1 ? "No Result" : (data.score >= data.target ? data.batTeam : data.bowlTeam);
       postCommentary("Match ended by Administrator.");
       update(ref(db, 'liveMatch'), data);
     }
@@ -247,17 +245,10 @@ export default function AdhikotProAdvanced() {
                  <div style={s.flexBetween}><span>Final Score:</span> <b>{match.score}/{match.wkts}</b></div>
                  <div style={s.flexBetween}><span>Overs:</span> <b>{match.ov}.{match.bl}</b></div>
                  <div style={s.divider}></div>
-                 <div style={{textAlign:'left', fontSize:'13px'}}>
-                    <p><b>Batters:</b></p>
-                    <div style={s.flexBetween}><span>{match.s1.n}</span> <span>{match.s1.r}({match.s1.b})</span></div>
-                    <div style={s.flexBetween}><span>{match.s2.n}</span> <span>{match.s2.r}({match.s2.b})</span></div>
-                    <p style={{marginTop:'10px'}}><b>Best Bowler:</b></p>
-                    <div style={s.flexBetween}><span>{match.bwr}</span> <span>{match.bwr_w}/{match.bwr_r}</span></div>
-                 </div>
               </div>
             ) : (
               <>
-                <div style={{fontSize:'14px', fontWeight:'bold', color: '#facc15', marginBottom: '5px', textTransform: 'uppercase'}}>{match.batTeam} BATTING</div>
+                <div style={{fontSize:'14px', fontWeight:'bold', color: '#facc15', marginBottom: '5px', textTransform: 'uppercase'}}>{match.batTeam} {match.status === 'Innings Break' ? 'INNINGS OVER' : 'BATTING'}</div>
                 <div style={{fontSize:'16px', fontWeight:'bold', opacity: 0.8}}>{match.batTeam} vs {match.bowlTeam}</div>
                 <div style={s.mainScore}>{match.score}/{match.wkts}</div>
                 <div style={s.overInfo}>Overs: {match.ov}.{match.bl} / {match.maxOv}</div>
@@ -275,7 +266,7 @@ export default function AdhikotProAdvanced() {
             ))}
           </div>
 
-          {match.status !== 'Finished' && (
+          {match.status === 'Live' && (
             <div style={s.playerCard}>
                {[match.s1, match.s2].map((p, i) => (
                   <div key={i} style={match.active === (i+1) ? {...s.activeP, fontSize: '14px'} : {...s.pRow, fontSize: '14px'}} onClick={() => isAdmin && setSelModal(i === 0 ? 's1' : 's2')}>
@@ -296,34 +287,31 @@ export default function AdhikotProAdvanced() {
 
           {isAdmin && (
             <div style={s.adminGrid}>
-              {match.status !== 'Finished' && (
+              {match.status === 'Live' && (
                 <>
                   {[0,1,2,3,4,6].map(r => <button key={r} onClick={()=>handleScore(r)} style={s.numBtn}>{r}</button>)}
                   <button onClick={()=>setExtraModal('wd')} style={s.exBtn}>WD+</button>
                   <button onClick={()=>setExtraModal('nb')} style={s.nbBtn}>NB+</button>
                   <button onClick={()=>setWktModal(true)} style={s.wktBtn}>OUT</button>
-                  
                   <div style={{gridColumn:'span 2', display:'flex', gap:'5px'}}>
                     <input value={commInput} onChange={e=>setCommInput(e.target.value)} placeholder="Write commentary..." style={s.commInput} />
                     <button onClick={()=>postCommentary(commInput)} style={s.postBtn}><FaPaperPlane/></button>
                   </div>
-                  
                   <button onClick={undoLastAction} style={s.editBtn}><FaEdit/> EDIT</button>
                   <button onClick={shareToWhatsApp} style={s.waBtn}><FaWhatsapp size={20}/> SHARE</button>
-                  {/* Manual Match End Button */}
                   <button onClick={endMatchManually} style={s.delBtn}><FaTimes/> END MATCH</button>
                 </>
               )}
               
-              <div style={{gridColumn:'span 3', display:'flex', gap:'10px', marginTop:'10px'}}>
+              <div style={{gridColumn:'span 3', display:'flex', flexDirection:'column', gap:'10px', marginTop:'10px'}}>
                 {match.status === 'Innings Break' && (
                   <button onClick={() => {
                     update(ref(db, 'liveMatch'), {innings: 2, score: 0, wkts: 0, ov: 0, bl: 0, target: match.score + 1, status: 'Live', batTeam: match.bowlTeam, bowlTeam: match.batTeam, bwr_r:0, bwr_w:0, bwr_o:0, bwr:'Bowler', commentary: ["Second Innings Started!"]});
-                  }} style={s.saveBtn}>START 2ND INN</button>
+                  }} style={s.saveBtn}>START 2ND INNINGS</button>
                 )}
-                <button onClick={saveMatchToHistory} style={s.saveBtn}><FaSave/> SAVE</button>
-                {match.status === 'Finished' && (
-                  <button onClick={closeMatch} style={s.delBtn}><FaTimes/> CLOSE & START NEW</button>
+                <button onClick={saveMatchToHistory} style={s.saveBtn}><FaSave/> SAVE TO HISTORY</button>
+                {(match.status === 'Finished' || match.status === 'Innings Break') && (
+                  <button onClick={closeMatch} style={s.delBtn}><FaTimes/> CLOSE MATCH</button>
                 )}
               </div>
             </div>
@@ -403,8 +391,8 @@ const s = {
   waBtn: { padding:'15px', background:'#25D366', color:'white', borderRadius:'10px', fontWeight:'bold', border:'none', display:'flex', alignItems:'center', justifyContent:'center', gap:'5px' },
   commInput: { flex:1, padding:'10px', background:'#1e293b', border:'1px solid #334155', color:'white', borderRadius:'8px' },
   postBtn: { padding:'10px 15px', background:'#facc15', color:'black', borderRadius:'8px', border:'none' },
-  saveBtn: { flex:1, padding:'12px', background:'#22c55e', color:'white', borderRadius:'8px', fontWeight:'bold', border:'none' },
-  delBtn: { flex:1, padding:'12px', background:'#b91c1c', color:'white', borderRadius:'8px', fontWeight:'bold', border:'none' },
+  saveBtn: { width:'100%', padding:'12px', background:'#22c55e', color:'white', borderRadius:'8px', fontWeight:'bold', border:'none' },
+  delBtn: { width:'100%', padding:'12px', background:'#b91c1c', color:'white', borderRadius:'8px', fontWeight:'bold', border:'none' },
   overlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:5000 },
   modal: { background:'#1e293b', width:'85%', padding:'20px', borderRadius:'20px', textAlign:'center' },
   historyItem: { background:'#0f172a', padding:'12px', borderRadius:'10px', marginBottom:'10px', textAlign:'left', borderLeft:'4px solid #facc15' },
