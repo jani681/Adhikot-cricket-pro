@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps } from "firebase/app";
 import { getDatabase, ref, set, onValue, update, remove, push } from "firebase/database";
-// Added FaVolumeUp, FaVolumeMute for the voice feature
-import { FaWhatsapp, FaSyncAlt, FaUserShield, FaTrophy, FaTrash, FaSave, FaPlay, FaCog, FaTimes, FaHistory, FaEdit, FaCommentDots, FaPaperPlane, FaVolumeUp, FaVolumeMute } from 'react-icons/fa';
+import { FaWhatsapp, FaSyncAlt, FaUserShield, FaTrophy, FaTrash, FaSave, FaPlay, FaCog, FaTimes, FaHistory, FaEdit, FaCommentDots, FaPaperPlane } from 'react-icons/fa';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB0e37uvyY7Jpuj-FYxDlX52hjb0uwsBfg",
@@ -23,8 +22,7 @@ export default function AdhikotProAdvanced() {
   const [wktModal, setWktModal] = useState(false);
   const [anim, setAnim] = useState("");
   const [lastState, setLastState] = useState(null); 
-  const [commInput, setCommInput] = useState("");
-  const [isMuted, setIsMuted] = useState(true); // Voice commentary state
+  const [commInput, setCommInput] = useState(""); // State for commentary input
 
   useEffect(() => {
     const matchRef = ref(db, 'liveMatch');
@@ -41,12 +39,6 @@ export default function AdhikotProAdvanced() {
              data.winner = data.score < data.target - 1 ? data.bowlTeam : 'Tie';
           }
         }
-        
-        // Voice Logic: Trigger when new commentary arrives
-        if (!isMuted && data.commentary && match?.commentary?.[0] !== data.commentary[0]) {
-           speakText(data.commentary[0]);
-        }
-        
         setMatch(data);
       } else { setMatch(null); }
     });
@@ -55,23 +47,14 @@ export default function AdhikotProAdvanced() {
     onValue(historyRef, (snap) => {
       setHistory(snap.val() || {});
     });
-  }, [isMuted, match]); // Dependencies updated for voice tracking
-
-  // Helper function for Text-to-Speech
-  const speakText = (text) => {
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'en-US';
-      utterance.rate = 1.0;
-      window.speechSynthesis.speak(utterance);
-    }
-  };
+  }, []);
 
   const triggerAnim = (txt) => { setAnim(txt); setTimeout(() => setAnim(""), 3000); };
 
+  // New function to post commentary
   const postCommentary = (text) => {
     if (!text || !match) return;
-    const newComm = [text, ...(match.commentary || [])].slice(0, 5);
+    const newComm = [text, ...(match.commentary || [])].slice(0, 5); // Keep last 5 entries
     update(ref(db, 'liveMatch'), { commentary: newComm });
     setCommInput("");
   };
@@ -95,17 +78,16 @@ export default function AdhikotProAdvanced() {
       data.score += runs; data.bwr_r += runs; data.bl += 1;
       striker.r = (parseInt(striker.r) || 0) + runs; striker.b += 1;
       if (runs === 4) { striker.fours += 1; triggerAnim("FOUR! ✨"); postCommentary(`${striker.n} hits a FOUR! ✨`); }
-      else if (runs === 6) { striker.sixes += 1; triggerAnim("SIXER! 🚀"); postCommentary(`${striker.n} hits a massive SIX! 🚀`); }
-      else { postCommentary(`${striker.n} scores ${runs} run(s)`); }
+      if (runs === 6) { striker.sixes += 1; triggerAnim("SIXER! 🚀"); postCommentary(`${striker.n} hits a massive SIX! 🚀`); }
     } else if (type === 'wd') {
       data.score += (1 + runs); data.bwr_r += (1 + runs);
       triggerAnim(`WIDE +${runs}`);
-      postCommentary(`Wide ball. +${1+runs} extra runs added.`);
+      postCommentary(`Wide ball +${runs} extra runs.`);
     } else if (type === 'nb') {
       data.score += (1 + runs); data.bwr_r += (1 + runs);
       striker.r = (parseInt(striker.r) || 0) + runs; striker.b += 1;
       triggerAnim(`NO BALL +${runs}`);
-      postCommentary(`No Ball! ${striker.n} scores from the extra.`);
+      postCommentary(`No Ball! ${striker.n} gets +${runs} runs.`);
     }
 
     if (outType) {
@@ -114,7 +96,7 @@ export default function AdhikotProAdvanced() {
       const outName = striker.n;
       striker.r = `OUT (${outType})`;
       triggerAnim(`WICKET! (${outType}) ☝️`);
-      postCommentary(`WICKET! ${outName} is OUT by ${outType}. ☝️`);
+      postCommentary(`WICKET! ${outName} is OUT (${outType}). ☝️`);
       setTimeout(() => setSelModal(data.active === 1 ? 's1' : 's2'), 500);
     }
 
@@ -123,16 +105,16 @@ export default function AdhikotProAdvanced() {
     if (data.bl === 6) { 
       data.ov += 1; data.bl = 0; data.bwr_o += 1; data.active = data.active === 1 ? 2 : 1; 
       triggerAnim("OVER! 🔄");
-      postCommentary(`End of over ${data.ov}. Score is ${data.score} for ${data.wkts}`);
+      postCommentary(`End of over ${data.ov}. Score: ${data.score}/${data.wkts}`);
       setTimeout(() => setSelModal('bwr'), 600);
     }
     
     if (data.innings === 2 && data.score >= data.target) {
       data.status = 'Finished';
-      postCommentary(`Match Over! ${data.batTeam} won the match! 🏆`);
+      postCommentary(`Match Finished! ${data.batTeam} won the match! 🏆`);
     } else if (data.ov >= data.maxOv || data.wkts >= 10) {
       data.status = data.innings === 1 ? 'Innings Break' : 'Finished';
-      if(data.status === 'Finished') postCommentary(`Match Finished! Victory for ${data.score < data.target - 1 ? data.bowlTeam : 'Tie'}`);
+      if(data.status === 'Finished') postCommentary(`Match Finished! ${data.score < data.target - 1 ? data.bowlTeam : 'Tie'} won!`);
     }
 
     update(ref(db, 'liveMatch'), data);
@@ -170,10 +152,6 @@ export default function AdhikotProAdvanced() {
              <div><b>Touqeer Iqbal</b><br/><small style={{color: isAdmin ? '#22c55e' : '#ef4444'}}>● {isAdmin ? 'ADMIN ACTIVE' : 'LIVE'}</small></div>
            </div>
            <div style={s.flex}>
-             {/* Unmute/Mute Toggle Button */}
-             <div onClick={() => setIsMuted(!isMuted)} style={{cursor:'pointer', color: isMuted ? '#ef4444' : '#22c55e', marginRight:'15px'}}>
-                {isMuted ? <FaVolumeMute size={22}/> : <FaVolumeUp size={22}/>}
-             </div>
              <FaHistory size={20} style={{cursor:'pointer', color:'#facc15'}} onClick={() => setShowHistory(true)} />
              <FaCog size={20} style={{opacity:0.5, marginLeft:'15px'}} onClick={() => setShowAuth(true)} />
            </div>
@@ -225,7 +203,7 @@ export default function AdhikotProAdvanced() {
               batTeam: batFirst === 'T1' ? t1 : t2, bowlTeam: batFirst === 'T1' ? t2 : t1,
               s1: {n: 'Striker', r: 0, b: 0, fours: 0, sixes: 0}, s2: {n: 'Non-Striker', r: 0, b: 0, fours: 0, sixes: 0}, 
               active: 1, score: 0, wkts: 0, ov: 0, bl: 0, innings: 1, status: 'Live', bwr: 'Bowler', bwr_r:0, bwr_w:0, bwr_o:0,
-              commentary: ["Welcome to Adhikot Cricket Pro Live! Match is about to start."]
+              commentary: ["Match Started! Welcome to Adhikot Cricket Pro."]
             });
           }}>
             <input name="lg" placeholder="League Name" style={s.input} required />
@@ -273,11 +251,9 @@ export default function AdhikotProAdvanced() {
             )}
           </div>
 
+          {/* Commentary Feed Display */}
           <div style={s.commBox}>
-            <div style={{color:'#facc15', fontSize:'12px', marginBottom:'5px', fontWeight:'bold', display:'flex', justifyContent:'space-between'}}>
-                <span><FaCommentDots/> LIVE COMMENTARY</span>
-                <span onClick={()=>setIsMuted(!isMuted)} style={{cursor:'pointer'}}>{isMuted ? <FaVolumeMute/> : <FaVolumeUp/>}</span>
-            </div>
+            <div style={{color:'#facc15', fontSize:'12px', marginBottom:'5px', fontWeight:'bold'}}><FaCommentDots/> LIVE COMMENTARY</div>
             {match.commentary?.map((c, i) => (
               <div key={i} style={{...s.commItem, opacity: i === 0 ? 1 : 0.6}}>
                 {i === 0 && <span style={s.newDot}></span>} {c}
@@ -313,6 +289,7 @@ export default function AdhikotProAdvanced() {
                   <button onClick={()=>setExtraModal('nb')} style={s.nbBtn}>NB+</button>
                   <button onClick={()=>setWktModal(true)} style={s.wktBtn}>OUT</button>
                   
+                  {/* Manual Commentary Input Row */}
                   <div style={{gridColumn:'span 2', display:'flex', gap:'5px'}}>
                     <input value={commInput} onChange={e=>setCommInput(e.target.value)} placeholder="Write commentary..." style={s.commInput} />
                     <button onClick={()=>postCommentary(commInput)} style={s.postBtn}><FaPaperPlane/></button>
@@ -326,7 +303,7 @@ export default function AdhikotProAdvanced() {
               <div style={{gridColumn:'span 3', display:'flex', gap:'10px', marginTop:'10px'}}>
                 {match.status === 'Innings Break' && (
                   <button onClick={() => {
-                    update(ref(db, 'liveMatch'), {innings: 2, score: 0, wkts: 0, ov: 0, bl: 0, target: match.score + 1, status: 'Live', batTeam: match.bowlTeam, bowlTeam: match.batTeam, bwr_r:0, bwr_w:0, bwr_o:0, bwr:'Bowler', commentary: ["Second Innings Started! Batting team needs " + (match.score + 1) + " to win."]});
+                    update(ref(db, 'liveMatch'), {innings: 2, score: 0, wkts: 0, ov: 0, bl: 0, target: match.score + 1, status: 'Live', batTeam: match.bowlTeam, bowlTeam: match.batTeam, bwr_r:0, bwr_w:0, bwr_o:0, bwr:'Bowler', commentary: ["Second Innings Started!"]});
                   }} style={s.saveBtn}>START 2ND INN</button>
                 )}
                 <button onClick={saveMatchToHistory} style={s.saveBtn}><FaSave/> SAVE</button>
@@ -339,6 +316,7 @@ export default function AdhikotProAdvanced() {
         </div>
       )}
 
+      {/* Modals remain same */}
       {extraModal && (
         <div style={s.overlay}><div style={s.modal}>
           <h3>{extraModal === 'wd' ? 'Wide' : 'No Ball'} Options</h3>
