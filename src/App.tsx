@@ -21,7 +21,7 @@ export default function AdhikotProAdvanced() {
   const [extraModal, setExtraModal] = useState(null);
   const [wktModal, setWktModal] = useState(false);
   const [anim, setAnim] = useState("");
-  const [lastState, setLastState] = useState(null); // For Edit/Undo
+  const [lastState, setLastState] = useState(null); 
 
   useEffect(() => {
     const matchRef = ref(db, 'liveMatch');
@@ -54,7 +54,7 @@ export default function AdhikotProAdvanced() {
     if (!match || match.status === 'Finished' || match.status === 'Innings Break') return;
     if (match.ov >= match.maxOv || match.wkts >= 10) return;
 
-    setLastState({...match}); // Save for Undo
+    setLastState({...match}); 
     let data = { ...match };
     let striker = data.active === 1 ? data.s1 : data.s2;
 
@@ -77,7 +77,6 @@ export default function AdhikotProAdvanced() {
       if (type === 'normal') data.bl += 1;
       striker.r = `OUT (${outType})`;
       triggerAnim(`WICKET! (${outType}) ☝️`);
-      // Manual selection modal will open via selModal after update
       setTimeout(() => setSelModal(data.active === 1 ? 's1' : 's2'), 500);
     }
 
@@ -105,8 +104,14 @@ export default function AdhikotProAdvanced() {
   const saveMatchToHistory = () => {
     if (!match) return;
     push(ref(db, 'matchHistory'), { ...match, timestamp: Date.now() });
-    remove(ref(db, 'liveMatch'));
     alert("Match Saved to History!");
+  };
+
+  const closeMatch = () => {
+    if (window.confirm("Are you sure you want to close this match?")) {
+      remove(ref(db, 'liveMatch'));
+      alert("Match Closed!");
+    }
   };
 
   return (
@@ -207,19 +212,26 @@ export default function AdhikotProAdvanced() {
              </div>
           </div>
 
-          {isAdmin && match.status !== 'Finished' && (
+          {isAdmin && (
             <div style={s.adminGrid}>
-              {[0,1,2,3,4,6].map(r => <button key={r} onClick={()=>handleScore(r)} style={s.numBtn}>{r}</button>)}
-              <button onClick={()=>setExtraModal('wd')} style={s.exBtn}>WD+</button>
-              <button onClick={()=>setExtraModal('nb')} style={s.nbBtn}>NB+</button>
-              <button onClick={()=>setWktModal(true)} style={s.wktBtn}>OUT</button>
-              <button onClick={undoLastAction} style={s.editBtn}><FaEdit/> EDIT</button>
+              {match.status !== 'Finished' && (
+                <>
+                  {[0,1,2,3,4,6].map(r => <button key={r} onClick={()=>handleScore(r)} style={s.numBtn}>{r}</button>)}
+                  <button onClick={()=>setExtraModal('wd')} style={s.exBtn}>WD+</button>
+                  <button onClick={()=>setExtraModal('nb')} style={s.nbBtn}>NB+</button>
+                  <button onClick={()=>setWktModal(true)} style={s.wktBtn}>OUT</button>
+                  <button onClick={undoLastAction} style={s.editBtn}><FaEdit/> EDIT</button>
+                </>
+              )}
               
-              <div style={{gridColumn:'span 2', display:'flex', gap:'10px'}}>
+              <div style={{gridColumn:'span 3', display:'flex', gap:'10px', marginTop:'10px'}}>
                 {match.status === 'Innings Break' && (
                   <button onClick={() => update(ref(db, 'liveMatch'), {innings: 2, score: 0, wkts: 0, ov: 0, bl: 0, target: match.score + 1, status: 'Live', batTeam: match.bowlTeam, bowlTeam: match.batTeam})} style={s.saveBtn}>START 2ND INN</button>
                 )}
                 <button onClick={saveMatchToHistory} style={s.saveBtn}><FaSave/> SAVE</button>
+                {match.status === 'Finished' && (
+                  <button onClick={closeMatch} style={s.delBtn}><FaTimes/> CLOSE & START NEW</button>
+                )}
               </div>
             </div>
           )}
