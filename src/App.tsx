@@ -29,7 +29,6 @@ export default function AdhikotProAdvanced() {
     onValue(matchRef, (snap) => {
       const data = snap.val();
       if (data) {
-        // Logic to check if match or innings should end based on overs or wickets
         if (data.status === 'Live') {
           if (data.innings === 2 && data.score >= data.target) {
             data.status = 'Finished';
@@ -68,7 +67,7 @@ export default function AdhikotProAdvanced() {
   };
 
   const handleScore = (runs, type = 'normal', outType = null) => {
-    if (!match || match.status !== 'Live') return;
+    if (!match || match.status !== 'Live' || !isAdmin) return;
 
     setLastState({...match}); 
     let data = { ...match };
@@ -103,7 +102,6 @@ export default function AdhikotProAdvanced() {
 
     if (runs % 2 !== 0 && type !== 'wd') data.active = data.active === 1 ? 2 : 1;
     
-    // Overs Logic: 6 balls complete an over
     if (data.bl === 6) { 
       data.ov += 1; data.bl = 0; data.bwr_o += 1; data.active = data.active === 1 ? 2 : 1; 
       triggerAnim("OVER! 🔄");
@@ -111,7 +109,6 @@ export default function AdhikotProAdvanced() {
       if (data.ov < data.maxOv) setTimeout(() => setSelModal('bwr'), 600);
     }
     
-    // Final check for Innings or Match End
     if (data.innings === 2 && data.score >= data.target) {
       data.status = 'Finished';
       data.winner = data.batTeam;
@@ -124,7 +121,7 @@ export default function AdhikotProAdvanced() {
   };
 
   const endMatchManually = () => {
-    if (!match) return;
+    if (!match || !isAdmin) return;
     if (window.confirm("Do you want to end this match now?")) {
       let data = { ...match };
       data.status = 'Finished';
@@ -135,7 +132,7 @@ export default function AdhikotProAdvanced() {
   };
 
   const undoLastAction = () => {
-    if (lastState) {
+    if (lastState && isAdmin) {
       update(ref(db, 'liveMatch'), lastState);
       setLastState(null);
       alert("Last Action Undone!");
@@ -143,13 +140,13 @@ export default function AdhikotProAdvanced() {
   };
 
   const saveMatchToHistory = () => {
-    if (!match) return;
+    if (!match || !isAdmin) return;
     push(ref(db, 'matchHistory'), { ...match, timestamp: Date.now() });
     alert("Match Saved to History!");
   };
 
   const closeMatch = () => {
-    if (window.confirm("Are you sure you want to close this match?")) {
+    if (window.confirm("Are you sure you want to close this match?") && isAdmin) {
       remove(ref(db, 'liveMatch'));
       alert("Match Closed!");
     }
@@ -173,7 +170,7 @@ export default function AdhikotProAdvanced() {
       {showAuth && !isAdmin && (
         <div style={s.overlay} onClick={() => setShowAuth(false)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
-            <input type="password" placeholder="ENTER PIN" style={s.pinInput} onChange={(e) => { if(e.target.value === "6545") { setIsAdmin(true); setShowAuth(false); }}} />
+            <input type="password" placeholder="ENTER PIN" style={s.pinInput} autoFocus onChange={(e) => { if(e.target.value === "6545") { setIsAdmin(true); setShowAuth(false); }}} />
           </div>
         </div>
       )}
@@ -203,35 +200,45 @@ export default function AdhikotProAdvanced() {
 
       {!match ? (
         <div style={s.setupBox}>
-          <h3 style={{color:'#facc15'}}><FaTrophy/> New Match Setup</h3>
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            const fd = new FormData(e.target);
-            const t1 = fd.get('t1'), t2 = fd.get('t2');
-            const batFirst = fd.get('batFirst');
-            set(ref(db, 'liveMatch'), {
-              lg: fd.get('lg'), t1, t2, c1: fd.get('c1'), c2: fd.get('c2'), 
-              emp: fd.get('emp'), date: fd.get('date'), time: fd.get('time'), maxOv: parseInt(fd.get('max')),
-              t1p: fd.get('t1p').split(','), t2p: fd.get('t2p').split(','),
-              batTeam: batFirst === 'T1' ? t1 : t2, bowlTeam: batFirst === 'T1' ? t2 : t1,
-              s1: {n: 'Striker', r: 0, b: 0, fours: 0, sixes: 0}, s2: {n: 'Non-Striker', r: 0, b: 0, fours: 0, sixes: 0}, 
-              active: 1, score: 0, wkts: 0, ov: 0, bl: 0, innings: 1, status: 'Live', bwr: 'Bowler', bwr_r:0, bwr_w:0, bwr_o:0,
-              commentary: ["Match Started! Welcome to Adhikot Cricket Pro."]
-            });
-          }}>
-            <input name="lg" placeholder="League Name" style={s.input} required />
-            <div style={s.flexGap}><input name="date" type="date" style={s.input} /><input name="time" type="time" style={s.input} /></div>
-            <input name="emp" placeholder="Umpire Name" style={s.input} />
-            <div style={s.flexGap}><input name="t1" placeholder="Team A" style={s.input}/><input name="c1" placeholder="Capt A" style={s.input}/></div>
-            <div style={s.flexGap}><input name="t2" placeholder="Team B" style={s.input}/><input name="c2" placeholder="Capt B" style={s.input}/></div>
-            <select name="batFirst" style={s.input} required>
-                <option value="">Select Batting First</option>
-                <option value="T1">Team A Batting First</option>
-                <option value="T2">Team B Batting First</option>
-            </select>
-            <textarea name="t1p" placeholder="Team A Players (comma separated)" style={s.area}/><textarea name="t2p" placeholder="Team B Players (comma separated)" style={s.area}/>
-            <div style={s.flexGap}><input name="max" placeholder="Overs" type="number" style={s.input}/><button type="submit" style={s.goldBtn}>START LIVE</button></div>
-          </form>
+          {isAdmin ? (
+            <>
+              <h3 style={{color:'#facc15'}}><FaTrophy/> New Match Setup</h3>
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const fd = new FormData(e.target);
+                const t1 = fd.get('t1'), t2 = fd.get('t2');
+                const batFirst = fd.get('batFirst');
+                set(ref(db, 'liveMatch'), {
+                  lg: fd.get('lg'), t1, t2, c1: fd.get('c1'), c2: fd.get('c2'), 
+                  emp: fd.get('emp'), date: fd.get('date'), time: fd.get('time'), maxOv: parseInt(fd.get('max')),
+                  t1p: fd.get('t1p').split(','), t2p: fd.get('t2p').split(','),
+                  batTeam: batFirst === 'T1' ? t1 : t2, bowlTeam: batFirst === 'T1' ? t2 : t1,
+                  s1: {n: 'Striker', r: 0, b: 0, fours: 0, sixes: 0}, s2: {n: 'Non-Striker', r: 0, b: 0, fours: 0, sixes: 0}, 
+                  active: 1, score: 0, wkts: 0, ov: 0, bl: 0, innings: 1, status: 'Live', bwr: 'Bowler', bwr_r:0, bwr_w:0, bwr_o:0,
+                  commentary: ["Match Started! Welcome to Adhikot Cricket Pro."]
+                });
+              }}>
+                <input name="lg" placeholder="League Name" style={s.input} required />
+                <div style={s.flexGap}><input name="date" type="date" style={s.input} /><input name="time" type="time" style={s.input} /></div>
+                <input name="emp" placeholder="Umpire Name" style={s.input} />
+                <div style={s.flexGap}><input name="t1" placeholder="Team A" style={s.input}/><input name="c1" placeholder="Capt A" style={s.input}/></div>
+                <div style={s.flexGap}><input name="t2" placeholder="Team B" style={s.input}/><input name="c2" placeholder="Capt B" style={s.input}/></div>
+                <select name="batFirst" style={s.input} required>
+                    <option value="">Select Batting First</option>
+                    <option value="T1">Team A Batting First</option>
+                    <option value="T2">Team B Batting First</option>
+                </select>
+                <textarea name="t1p" placeholder="Team A Players" style={s.area}/><textarea name="t2p" placeholder="Team B Players" style={s.area}/>
+                <div style={s.flexGap}><input name="max" placeholder="Overs" type="number" style={s.input}/><button type="submit" style={s.goldBtn}>START LIVE</button></div>
+              </form>
+            </>
+          ) : (
+            <div style={{textAlign:'center', padding:'20px'}}>
+              <FaTrophy size={40} color="#facc15" />
+              <h3 style={{marginTop:'15px'}}>Waiting for Match...</h3>
+              <p style={{opacity:0.6}}>Live score will appear here once the match starts.</p>
+            </div>
+          )}
         </div>
       ) : (
         <div style={{padding:'10px'}}>
@@ -285,6 +292,7 @@ export default function AdhikotProAdvanced() {
             </div>
           )}
 
+          {/* ADMIN CONTROLS: Only visible to Admin */}
           {isAdmin && (
             <div style={s.adminGrid}>
               {match.status === 'Live' && (
