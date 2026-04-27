@@ -198,8 +198,8 @@ export default function AdhikotProAdvanced() {
            </div>
       </div></div>
 
-      {/* NEW INTERNATIONAL SCORE BUTTON - Zero disturbance to structure */}
-      <div style={{padding: '0 15px'}}>
+      {/* FIXED: Button placed outside match logic to show for everyone always */}
+      <div style={{padding: '0 15px', marginBottom: '10px'}}>
         <button 
           onClick={() => window.open('https://www.cricbuzz.com/cricket-match/live-scores', '_blank')}
           style={s.interBtn}
@@ -383,7 +383,7 @@ export default function AdhikotProAdvanced() {
 
 const s = {
   container: { background: '#020617', minHeight: '100vh', color: 'white', fontFamily: 'sans-serif' },
-  header: { background:'#0f172a', padding:'15px', borderBottom:'1px solid #1e293b', marginBottom: '10px' },
+  header: { background:'#0f172a', padding:'15px', borderBottom:'1px solid #1e293b', marginBottom: '5px' },
   interBtn: { width: '100%', padding: '12px', background: 'linear-gradient(90deg, #1e293b, #334155)', color: '#facc15', border: '1px solid #facc15', borderRadius: '12px', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 15px rgba(250, 204, 21, 0.1)' },
   flex: { display:'flex', alignItems:'center', gap:'10px' },
   flexBetween: { display:'flex', alignItems:'center', justifyContent:'space-between' },
