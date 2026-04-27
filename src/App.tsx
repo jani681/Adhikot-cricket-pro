@@ -59,7 +59,6 @@ export default function AdhikotProAdvanced() {
     setCommInput("");
   };
 
-  // IMPROVEMENT 2: Professional WhatsApp Sharing
   const shareToWhatsApp = () => {
     if (!match) return;
     const totalBalls = (match.ov * 6) + match.bl;
@@ -81,11 +80,9 @@ export default function AdhikotProAdvanced() {
 
   const handleScore = (runs, type = 'normal', outType = null) => {
     if (!match || match.status !== 'Live' || !isAdmin) return;
-
     setLastState({...match}); 
     let data = { ...match };
     let striker = data.active === 1 ? data.s1 : data.s2;
-
     if (type === 'normal') {
       data.score += runs; data.bwr_r += runs; data.bl += 1;
       striker.r = (parseInt(striker.r) || 0) + runs; striker.b += 1;
@@ -102,7 +99,6 @@ export default function AdhikotProAdvanced() {
       triggerAnim(`NO BALL +${runs}`);
       postCommentary(`No Ball! ${striker.n} scores from the extra.`);
     }
-
     if (outType) {
       data.wkts += 1; data.bwr_w += (outType !== 'Run Out' ? 1 : 0);
       if (type === 'normal') data.bl += 1;
@@ -112,23 +108,19 @@ export default function AdhikotProAdvanced() {
       postCommentary(`WICKET! ${outName} is OUT by ${outType}. ☝️`);
       if (data.wkts < 10) setTimeout(() => setSelModal(data.active === 1 ? 's1' : 's2'), 500);
     }
-
     if (runs % 2 !== 0 && type !== 'wd') data.active = data.active === 1 ? 2 : 1;
-    
     if (data.bl === 6) { 
       data.ov += 1; data.bl = 0; data.bwr_o += 1; data.active = data.active === 1 ? 2 : 1; 
       triggerAnim("OVER! 🔄");
       postCommentary(`End of over ${data.ov}. Score: ${data.score}/${data.wkts}`);
       if (data.ov < data.maxOv) setTimeout(() => setSelModal('bwr'), 600);
     }
-    
     if (data.innings === 2 && data.score >= data.target) {
       data.status = 'Finished';
       data.winner = data.batTeam;
     } else if (data.ov >= data.maxOv || data.wkts >= 10) {
       data.status = data.innings === 1 ? 'Innings Break' : 'Finished';
     }
-
     update(ref(db, 'liveMatch'), data);
     setExtraModal(null); setWktModal(false);
   };
@@ -165,12 +157,10 @@ export default function AdhikotProAdvanced() {
     }
   };
 
-  // Helper for CRR/RRR Calculation
   const calculateRates = () => {
     if(!match) return {crr: "0.00", rrr: "0.00"};
     const totalBallsPlayed = (match.ov * 6) + match.bl;
     const crr = totalBallsPlayed > 0 ? ((match.score / totalBallsPlayed) * 6).toFixed(2) : "0.00";
-    
     let rrr = "0.00";
     if (match.innings === 2 && match.status === 'Live') {
       const ballsLeft = (match.maxOv * 6) - totalBallsPlayed;
@@ -197,9 +187,11 @@ export default function AdhikotProAdvanced() {
            </div>
       </div></div>
 
+      {/* IMPROVEMENT: Added Active button feedback via global CSS */}
       <style>{`
         .blink { animation: blinker 1.5s linear infinite; }
         @keyframes blinker { 50% { opacity: 0.3; } }
+        button:active { transform: scale(0.95); opacity: 0.8; }
       `}</style>
 
       {showAuth && !isAdmin && (
@@ -241,8 +233,7 @@ export default function AdhikotProAdvanced() {
               <form onSubmit={(e) => {
                 e.preventDefault();
                 const fd = new FormData(e.target);
-                const t1 = fd.get('t1'), t2 = fd.get('t2');
-                const batFirst = fd.get('batFirst');
+                const t1 = fd.get('t1'), t2 = fd.get('t2'), batFirst = fd.get('batFirst');
                 set(ref(db, 'liveMatch'), {
                   lg: fd.get('lg'), t1, t2, c1: fd.get('c1'), c2: fd.get('c2'), 
                   emp: fd.get('emp'), date: fd.get('date'), time: fd.get('time'), maxOv: parseInt(fd.get('max')),
@@ -284,7 +275,8 @@ export default function AdhikotProAdvanced() {
                  <h2 style={{color:'#facc15', margin:'5px 0'}}>MATCH SUMMARY</h2>
                  <p style={{opacity:0.8}}>{match.batTeam} vs {match.bowlTeam}</p>
                  <div style={s.divider}></div>
-                 <div style={s.flexBetween}><span>Final Score:</span> <b>{match.score}/{match.wkts}</b></div>
+                 {/* IMPROVEMENT: Score Color turns Golden when Finished */}
+                 <div style={s.flexBetween}><span>Final Score:</span> <b style={{color:'#facc15', fontSize:'20px'}}>{match.score}/{match.wkts}</b></div>
                  <div style={s.flexBetween}><span>Overs:</span> <b>{match.ov}.{match.bl}</b></div>
                  <div style={s.divider}></div>
               </div>
@@ -294,25 +286,25 @@ export default function AdhikotProAdvanced() {
                 <div style={{fontSize:'16px', fontWeight:'bold', opacity: 0.8}}>{match.batTeam} vs {match.bowlTeam}</div>
                 <div style={s.mainScore}>{match.score}/{match.wkts}</div>
                 <div style={s.overInfo}>Overs: {match.ov}.{match.bl} / {match.maxOv}</div>
-                
-                {/* IMPROVEMENT 1: Run Rate Display */}
                 <div style={{display:'flex', justifyContent:'center', gap:'15px', marginTop:'10px'}}>
                    <div style={s.rateBadge}>CRR: {rates.crr}</div>
                    {match.innings === 2 && <div style={{...s.rateBadge, background:'#ef4444'}}>RRR: {rates.rrr}</div>}
                 </div>
-
                 {match.target > 0 && <div style={s.targetBox}>Target: {match.target}</div>}
               </>
             )}
           </div>
 
-          <div style={s.commBox}>
+          {/* IMPROVEMENT: Flex Direction for Commentary so Newest is always on top */}
+          <div style={{...s.commBox, display:'flex', flexDirection:'column'}}>
             <div style={{color:'#facc15', fontSize:'12px', marginBottom:'5px', fontWeight:'bold'}}><FaCommentDots/> LIVE COMMENTARY</div>
-            {match.commentary?.map((c, i) => (
-              <div key={i} style={{...s.commItem, opacity: i === 0 ? 1 : 0.6}}>
-                {i === 0 && <span style={s.newDot}></span>} {c}
-              </div>
-            ))}
+            <div style={{display:'flex', flexDirection:'column'}}>
+                {match.commentary?.map((c, i) => (
+                <div key={i} style={{...s.commItem, opacity: i === 0 ? 1 : 0.6}}>
+                    {i === 0 && <span style={s.newDot}></span>} {c}
+                </div>
+                ))}
+            </div>
           </div>
 
           {match.status === 'Live' && (
@@ -351,12 +343,9 @@ export default function AdhikotProAdvanced() {
                   <button onClick={endMatchManually} style={s.delBtn}><FaTimes/> END MATCH</button>
                 </>
               )}
-              
               <div style={{gridColumn:'span 3', display:'flex', flexDirection:'column', gap:'10px', marginTop:'10px'}}>
                 {match.status === 'Innings Break' && (
-                  <button onClick={() => {
-                    update(ref(db, 'liveMatch'), {innings: 2, score: 0, wkts: 0, ov: 0, bl: 0, target: match.score + 1, status: 'Live', batTeam: match.bowlTeam, bowlTeam: match.batTeam, bwr_r:0, bwr_w:0, bwr_o:0, bwr:'Bowler', commentary: ["Second Innings Started!"]});
-                  }} style={s.saveBtn}>START 2ND INNINGS</button>
+                  <button onClick={() => update(ref(db, 'liveMatch'), {innings: 2, score: 0, wkts: 0, ov: 0, bl: 0, target: match.score + 1, status: 'Live', batTeam: match.bowlTeam, bowlTeam: match.batTeam, bwr_r:0, bwr_w:0, bwr_o:0, bwr:'Bowler', commentary: ["Second Innings Started!"]})} style={s.saveBtn}>START 2ND INNINGS</button>
                 )}
                 <button onClick={saveMatchToHistory} style={s.saveBtn}><FaSave/> SAVE TO HISTORY</button>
                 {(match.status === 'Finished' || match.status === 'Innings Break') && (
@@ -368,42 +357,9 @@ export default function AdhikotProAdvanced() {
         </div>
       )}
 
-      {extraModal && (
-        <div style={s.overlay}><div style={s.modal}>
-          <h3>{extraModal === 'wd' ? 'Wide' : 'No Ball'} Options</h3>
-          <div style={s.grid3}>
-            {[0,1,2,3,4,6].map(v => <button key={v} onClick={()=>handleScore(v, extraModal)} style={s.numBtn}>+{v}</button>)}
-            <button onClick={()=>setExtraModal(null)} style={s.delBtn}>CLOSE</button>
-          </div>
-        </div></div>
-      )}
-
-      {wktModal && (
-        <div style={s.overlay}><div style={s.modal}>
-          <h3>Dismissal Type</h3>
-          {['Bold', 'Caught', 'Run Out', 'LBW', 'Stumped'].map(t => (
-            <button key={t} onClick={()=>handleScore(0, 'normal', t)} style={s.pItem}>{t}</button>
-          ))}
-          <button onClick={()=>setWktModal(false)} style={s.delBtn}>CANCEL</button>
-        </div></div>
-      )}
-
-      {isAdmin && selModal && (
-        <div style={s.overlay} onClick={() => setSelModal(null)}><div style={s.modal} onClick={e => e.stopPropagation()}>
-          <h3>Select {selModal === 'bwr' ? 'Bowler' : 'Batsman'}</h3>
-          <div style={{maxHeight: '300px', overflowY: 'auto'}}>
-          {(selModal === 'bwr' ? (match.batTeam === match.t1 ? match.t2p : match.t1p) : (match.batTeam === match.t1 ? match.t1p : match.t2p)).map((p, i) => (
-            <div key={i} style={s.pItem} onClick={() => {
-                const up = {};
-                if(selModal==='s1') up.s1 = {n:p, r:0, b:0, fours:0, sixes:0};
-                if(selModal==='s2') up.s2 = {n:p, r:0, b:0, fours:0, sixes:0};
-                if(selModal==='bwr') { up.bwr = p; up.bwr_r = 0; up.bwr_w = 0; up.bwr_o = match.ov; }
-                update(ref(db, 'liveMatch'), up); setSelModal(null);
-            }}>{p}</div>
-          ))}
-          </div>
-        </div></div>
-      )}
+      {extraModal && <div style={s.overlay}><div style={s.modal}><h3>Extras</h3><div style={s.grid3}>{[0,1,2,3,4,6].map(v => <button key={v} onClick={()=>handleScore(v, extraModal)} style={s.numBtn}>+{v}</button>)}<button onClick={()=>setExtraModal(null)} style={s.delBtn}>CLOSE</button></div></div></div>}
+      {wktModal && <div style={s.overlay}><div style={s.modal}><h3>Dismissal</h3>{['Bold', 'Caught', 'Run Out', 'LBW', 'Stumped'].map(t => (<button key={t} onClick={()=>handleScore(0, 'normal', t)} style={s.pItem}>{t}</button>))}<button onClick={()=>setWktModal(false)} style={s.delBtn}>CANCEL</button></div></div>}
+      {isAdmin && selModal && <div style={s.overlay} onClick={() => setSelModal(null)}><div style={s.modal} onClick={e => e.stopPropagation()}><h3>Select Player</h3><div style={{maxHeight: '300px', overflowY: 'auto'}}>{(selModal === 'bwr' ? (match.batTeam === match.t1 ? match.t2p : match.t1p) : (match.batTeam === match.t1 ? match.t1p : match.t2p)).map((p, i) => (<div key={i} style={s.pItem} onClick={() => { const up = {}; if(selModal==='s1') up.s1 = {n:p, r:0, b:0, fours:0, sixes:0}; if(selModal==='s2') up.s2 = {n:p, r:0, b:0, fours:0, sixes:0}; if(selModal==='bwr') { up.bwr = p; up.bwr_r = 0; up.bwr_w = 0; up.bwr_o = match.ov; } update(ref(db, 'liveMatch'), up); setSelModal(null); }}>{p}</div>))}</div></div></div>}
     </div>
   );
 }
@@ -432,7 +388,7 @@ const s = {
   divider: { height:'1px', background:'#334155', margin:'10px 0' },
   adminGrid: { display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'8px', padding:'10px' },
   grid3: { display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'10px' },
-  numBtn: { padding:'15px', background:'white', color:'black', borderRadius:'10px', fontWeight:'bold', border:'none' },
+  numBtn: { padding:'15px', background:'white', color:'black', borderRadius:'10px', fontWeight:'bold', border:'none', transition:'0.2s' },
   exBtn: { padding:'15px', background:'#fb923c', color:'white', borderRadius:'10px', fontWeight:'bold', border:'none' },
   nbBtn: { padding:'15px', background:'#8b5cf6', color:'white', borderRadius:'10px', fontWeight:'bold', border:'none' },
   wktBtn: { padding:'15px', background:'#ef4444', color:'white', borderRadius:'10px', fontWeight:'bold', border:'none' },
