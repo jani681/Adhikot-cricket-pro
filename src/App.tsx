@@ -50,6 +50,12 @@ export default function AdhikotProAdvanced() {
 
   const triggerAnim = (txt) => { setAnim(txt); setTimeout(() => setAnim(""), 3000); };
 
+  const shareToWhatsApp = () => {
+    if (!match) return;
+    const msg = `🏏 *LIVE MATCH UPDATE* 🏏\n\n*${match.batTeam} vs ${match.bowlTeam}*\nScore: ${match.score}/${match.wkts}\nOvers: ${match.ov}.${match.bl} / ${match.maxOv}\n\n*Batting:* \n- ${match.s1.n}: ${match.s1.r}(${match.s1.b})\n- ${match.s2.n}: ${match.s2.r}(${match.s2.b})\n\n*Bowling:* \n- ${match.bwr}: ${match.bwr_w}/${match.bwr_r} (${match.bwr_o}.${match.bl})\n\nShared via Adhikot Cricket Pro`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
   const handleScore = (runs, type = 'normal', outType = null) => {
     if (!match || match.status === 'Finished' || match.status === 'Innings Break') return;
     if (match.ov >= match.maxOv || match.wkts >= 10) return;
@@ -82,14 +88,10 @@ export default function AdhikotProAdvanced() {
 
     if (runs % 2 !== 0 && type !== 'wd') data.active = data.active === 1 ? 2 : 1;
     
-    // NEW LOGIC: Trigger manual bowler selection on over completion
     if (data.bl === 6) { 
-      data.ov += 1; 
-      data.bl = 0; 
-      data.bwr_o += 1; 
-      data.active = data.active === 1 ? 2 : 1; 
+      data.ov += 1; data.bl = 0; data.bwr_o += 1; data.active = data.active === 1 ? 2 : 1; 
       triggerAnim("OVER! 🔄");
-      setTimeout(() => setSelModal('bwr'), 600); // Opens bowler popup
+      setTimeout(() => setSelModal('bwr'), 600);
     }
     
     if (data.innings === 2 && data.score >= data.target) {
@@ -157,9 +159,10 @@ export default function AdhikotProAdvanced() {
                 {Object.keys(history).length === 0 ? <p>No history found.</p> : 
                  Object.entries(history).reverse().map(([id, m]) => (
                     <div key={id} style={s.historyItem}>
-                        <div style={s.flexBetween}><small>{m.date}</small></div>
+                        <div style={s.flexBetween}><small>{m.date} - {m.lg}</small></div>
                         <div style={{fontWeight:'bold'}}>{m.t1} vs {m.t2}</div>
-                        <div style={{color:'#facc15'}}>{m.score}/{m.wkts} ({m.ov}.{m.bl})</div>
+                        <div style={{color:'#facc15'}}>Score: {m.score}/{m.wkts} ({m.ov}.{m.bl})</div>
+                        <div style={{fontSize:'10px', opacity:0.6}}>Winner: {m.winner || 'N/A'}</div>
                     </div>
                 ))}
             </div>
@@ -186,10 +189,7 @@ export default function AdhikotProAdvanced() {
             });
           }}>
             <input name="lg" placeholder="League Name" style={s.input} required />
-            <div style={s.flexGap}>
-              <input name="date" type="date" style={s.input} />
-              <input name="time" type="time" style={s.input} />
-            </div>
+            <div style={s.flexGap}><input name="date" type="date" style={s.input} /><input name="time" type="time" style={s.input} /></div>
             <input name="emp" placeholder="Umpire Name" style={s.input} />
             <div style={s.flexGap}><input name="t1" placeholder="Team A" style={s.input}/><input name="c1" placeholder="Capt A" style={s.input}/></div>
             <div style={s.flexGap}><input name="t2" placeholder="Team B" style={s.input}/><input name="c2" placeholder="Capt B" style={s.input}/></div>
@@ -205,46 +205,52 @@ export default function AdhikotProAdvanced() {
       ) : (
         <div style={{padding:'10px'}}>
           <div style={s.card}>
-            {match.status === 'Finished' && <div style={s.winBanner}>{match.winner} WON! 🏆</div>}
-            {/* UPDATED: Batting Team Name on Scoreboard */}
-            <div style={{fontSize:'14px', fontWeight:'bold', color: '#facc15', marginBottom: '5px', textTransform: 'uppercase'}}>{match.batTeam} BATTING</div>
-            <div style={{fontSize:'16px', fontWeight:'bold', opacity: 0.8}}>{match.batTeam} vs {match.bowlTeam}</div>
-            <div style={s.mainScore}>{match.score}/{match.wkts}</div>
-            <div style={s.overInfo}>Overs: {match.ov}.{match.bl} / {match.maxOv}</div>
-            {match.target > 0 && <div style={s.targetBox}>Target: {match.target}</div>}
+            {match.status === 'Finished' ? (
+              <div style={s.fullScoreboard}>
+                 <div style={s.winBanner}>{match.winner} WON! 🏆</div>
+                 <h2 style={{color:'#facc15', margin:'5px 0'}}>MATCH SUMMARY</h2>
+                 <p style={{opacity:0.8}}>{match.batTeam} vs {match.bowlTeam}</p>
+                 <div style={s.divider}></div>
+                 <div style={s.flexBetween}><span>Final Score:</span> <b>{match.score}/{match.wkts}</b></div>
+                 <div style={s.flexBetween}><span>Overs:</span> <b>{match.ov}.{match.bl}</b></div>
+                 <div style={s.divider}></div>
+                 <div style={{textAlign:'left', fontSize:'13px'}}>
+                    <p><b>Batters:</b></p>
+                    <div style={s.flexBetween}><span>{match.s1.n}</span> <span>{match.s1.r}({match.s1.b})</span></div>
+                    <div style={s.flexBetween}><span>{match.s2.n}</span> <span>{match.s2.r}({match.s2.b})</span></div>
+                    <p style={{marginTop:'10px'}}><b>Best Bowler:</b></p>
+                    <div style={s.flexBetween}><span>{match.bwr}</span> <span>{match.bwr_w}/{match.bwr_r}</span></div>
+                 </div>
+              </div>
+            ) : (
+              <>
+                <div style={{fontSize:'14px', fontWeight:'bold', color: '#facc15', marginBottom: '5px', textTransform: 'uppercase'}}>{match.batTeam} BATTING</div>
+                <div style={{fontSize:'16px', fontWeight:'bold', opacity: 0.8}}>{match.batTeam} vs {match.bowlTeam}</div>
+                <div style={s.mainScore}>{match.score}/{match.wkts}</div>
+                <div style={s.overInfo}>Overs: {match.ov}.{match.bl} / {match.maxOv}</div>
+                {match.target > 0 && <div style={s.targetBox}>Target: {match.target}</div>}
+              </>
+            )}
           </div>
 
-          <div style={s.playerCard}>
-             <div style={{...s.pRow, borderBottom:'1px solid #334155', paddingBottom:'5px', marginBottom:'5px', opacity:0.5, fontSize:'12px'}}>
-                <span style={{flex:2}}>BATSMAN</span>
-                <span style={{flex:1, textAlign:'center'}}>R(B)</span>
-                <span style={{flex:0.5}}>4s</span>
-                <span style={{flex:0.5}}>6s</span>
-                <span style={{flex:1, textAlign:'right'}}>SR</span>
-             </div>
-             {[match.s1, match.s2].map((p, i) => (
-                <div key={i} style={match.active === (i+1) ? {...s.activeP, fontSize: '14px'} : {...s.pRow, fontSize: '14px'}} onClick={() => isAdmin && setSelModal(i === 0 ? 's1' : 's2')}>
-                   <span style={{flex:2, overflow:'hidden'}}>{p.n}{match.active === (i+1) ? '*' : ''}</span>
-                   <span style={{flex:1, textAlign:'center'}}>{String(p.r).includes('OUT') ? p.r : `${p.r || 0}(${p.b || 0})`}</span>
-                   <span style={{flex:0.5}}>{p.fours || 0}</span>
-                   <span style={{flex:0.5}}>{p.sixes || 0}</span>
-                   <span style={{flex:1, textAlign:'right'}}>{p.b > 0 && !String(p.r).includes('OUT') ? ((p.r / p.b) * 100).toFixed(2) : '0.00'}</span>
-                </div>
-             ))}
-             <div style={s.divider}></div>
-             <div style={{...s.pRow, opacity:0.5, fontSize:'12px'}}>
-                <span style={{flex:2}}>BOWLER</span>
-                <span style={{flex:1, textAlign:'center'}}>O</span>
-                <span style={{flex:0.5}}>R</span>
-                <span style={{flex:0.5, textAlign:'right'}}>W</span>
-             </div>
-             <div style={{...s.pRow, fontSize:'14px'}} onClick={() => isAdmin && setSelModal('bwr')}>
-                <span style={{flex:2, color:'#60a5fa'}}>{match.bwr}</span>
-                <span style={{flex:1, textAlign:'center'}}>{match.bwr_o || 0}.{match.bl || 0}</span>
-                <span style={{flex:0.5}}>{match.bwr_r || 0}</span>
-                <span style={{flex:0.5, textAlign:'right'}}>{match.bwr_w || 0}</span>
-             </div>
-          </div>
+          {match.status !== 'Finished' && (
+            <div style={s.playerCard}>
+               {[match.s1, match.s2].map((p, i) => (
+                  <div key={i} style={match.active === (i+1) ? {...s.activeP, fontSize: '14px'} : {...s.pRow, fontSize: '14px'}} onClick={() => isAdmin && setSelModal(i === 0 ? 's1' : 's2')}>
+                     <span style={{flex:2}}>{p.n}{match.active === (i+1) ? '*' : ''}</span>
+                     <span style={{flex:1, textAlign:'center'}}>{String(p.r).includes('OUT') ? p.r : `${p.r || 0}(${p.b || 0})`}</span>
+                     <span style={{flex:0.5}}>{p.fours} 4s</span>
+                     <span style={{flex:0.5}}>{p.sixes} 6s</span>
+                  </div>
+               ))}
+               <div style={s.divider}></div>
+               <div style={{...s.pRow, fontSize:'14px'}} onClick={() => isAdmin && setSelModal('bwr')}>
+                  <span style={{flex:2, color:'#60a5fa'}}>{match.bwr}</span>
+                  <span style={{flex:1, textAlign:'center'}}>{match.bwr_o}.{match.bl}</span>
+                  <span style={{flex:1, textAlign:'right'}}>{match.bwr_w} - {match.bwr_r}</span>
+               </div>
+            </div>
+          )}
 
           {isAdmin && (
             <div style={s.adminGrid}>
@@ -255,6 +261,7 @@ export default function AdhikotProAdvanced() {
                   <button onClick={()=>setExtraModal('nb')} style={s.nbBtn}>NB+</button>
                   <button onClick={()=>setWktModal(true)} style={s.wktBtn}>OUT</button>
                   <button onClick={undoLastAction} style={s.editBtn}><FaEdit/> EDIT</button>
+                  <button onClick={shareToWhatsApp} style={s.waBtn}><FaWhatsapp size={20}/> SHARE</button>
                 </>
               )}
               
@@ -272,6 +279,7 @@ export default function AdhikotProAdvanced() {
         </div>
       )}
 
+      {/* Modals remain same as per previous logic */}
       {extraModal && (
         <div style={s.overlay}><div style={s.modal}>
           <h3>{extraModal === 'wd' ? 'Wide' : 'No Ball'} Options</h3>
@@ -301,12 +309,7 @@ export default function AdhikotProAdvanced() {
                 const up = {};
                 if(selModal==='s1') up.s1 = {n:p, r:0, b:0, fours:0, sixes:0};
                 if(selModal==='s2') up.s2 = {n:p, r:0, b:0, fours:0, sixes:0};
-                if(selModal==='bwr') {
-                   up.bwr = p;
-                   up.bwr_r = 0;
-                   up.bwr_w = 0;
-                   up.bwr_o = match.bl === 0 ? match.ov : match.ov; // Reset current bwr stats for new bwr
-                }
+                if(selModal==='bwr') { up.bwr = p; up.bwr_r = 0; up.bwr_w = 0; up.bwr_o = match.ov; }
                 update(ref(db, 'liveMatch'), up); setSelModal(null);
             }}>{p}</div>
           ))}
@@ -323,7 +326,7 @@ const s = {
   flex: { display:'flex', alignItems:'center', gap:'10px' },
   flexBetween: { display:'flex', alignItems:'center', justifyContent:'space-between' },
   avatar: { width:'35px', height:'35px', background:'#facc15', borderRadius:'50%', color:'black', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold' },
-  winBanner: { background:'#22c55e', color:'white', padding:'10px', borderRadius:'10px', marginBottom:'15px', fontWeight:'bold' },
+  winBanner: { background:'#22c55e', color:'white', padding:'10px', borderRadius:'10px', marginBottom:'10px', fontWeight:'bold' },
   setupBox: { padding:'20px', background:'#0f172a', margin:'15px', borderRadius:'15px' },
   input: { width:'100%', padding:'10px', marginBottom:'10px', background:'#1e293b', border:'1px solid #334155', color:'white', borderRadius:'8px', boxSizing:'border-box' },
   area: { width:'100%', padding:'10px', height:'60px', background:'#1e293b', border:'1px solid #334155', color:'white', borderRadius:'8px', marginBottom:'10px' },
@@ -343,6 +346,7 @@ const s = {
   nbBtn: { padding:'15px', background:'#8b5cf6', color:'white', borderRadius:'10px', fontWeight:'bold', border:'none' },
   wktBtn: { padding:'15px', background:'#ef4444', color:'white', borderRadius:'10px', fontWeight:'bold', border:'none' },
   editBtn: { padding:'15px', background:'#3b82f6', color:'white', borderRadius:'10px', fontWeight:'bold', border:'none' },
+  waBtn: { padding:'15px', background:'#25D366', color:'white', borderRadius:'10px', fontWeight:'bold', border:'none', display:'flex', alignItems:'center', justifyContent:'center', gap:'5px' },
   saveBtn: { flex:1, padding:'12px', background:'#22c55e', color:'white', borderRadius:'8px', fontWeight:'bold', border:'none' },
   delBtn: { flex:1, padding:'12px', background:'#b91c1c', color:'white', borderRadius:'8px', fontWeight:'bold', border:'none' },
   overlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:5000 },
@@ -351,5 +355,6 @@ const s = {
   pItem: { width:'100%', padding:'12px', background:'#0f172a', color:'white', border:'none', borderBottom:'1px solid #334155', textAlign:'left' },
   bigAnim: { position:'fixed', top:'40%', left:'50%', transform:'translateX(-50%)', background:'#facc15', color:'black', padding:'15px 30px', borderRadius:'50px', fontWeight:'bold', zIndex:6000 },
   pinInput: { padding:'15px', background:'#0f172a', border:'2px solid #facc15', color:'white', borderRadius:'10px', textAlign:'center' },
-  overInfo: { fontSize:'18px', opacity:0.8 }
+  overInfo: { fontSize:'18px', opacity:0.8 },
+  fullScoreboard: { padding: '10px' }
 };
