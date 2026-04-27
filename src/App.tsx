@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps } from "firebase/app";
 import { getDatabase, ref, set, onValue, update, remove, push } from "firebase/database";
-import { FaWhatsapp, FaSyncAlt, FaUserShield, FaTrophy, FaTrash, FaSave, FaPlay, FaCog, FaTimes } from 'react-icons/fa';
+import { FaWhatsapp, FaSyncAlt, FaUserShield, FaTrophy, FaTrash, FaSave, FaPlay, FaCog, FaTimes, FaHistory } from 'react-icons/fa';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB0e37uvyY7Jpuj-FYxDlX52hjb0uwsBfg",
@@ -13,19 +13,21 @@ const db = getDatabase(app);
 
 export default function AdhikotProAdvanced() {
   const [match, setMatch] = useState(null);
+  const [history, setHistory] = useState({}); // Match History State
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [showHistory, setShowHistory] = useState(false); // History Modal Toggle
   const [selModal, setSelModal] = useState(null);
-  const [extraModal, setExtraModal] = useState(null); // For WD/NB options
-  const [wktModal, setWktModal] = useState(false); // For Out type
+  const [extraModal, setExtraModal] = useState(null);
+  const [wktModal, setWktModal] = useState(false);
   const [anim, setAnim] = useState("");
 
   useEffect(() => {
+    // Live Match Listener
     const matchRef = ref(db, 'liveMatch');
-    return onValue(matchRef, (snap) => {
+    onValue(matchRef, (snap) => {
       const data = snap.val();
       if (data) {
-        // Auto-End Logic
         if (data.innings === 2 && data.score >= data.target) {
           data.status = 'Finished';
           data.winner = data.t1;
@@ -39,12 +41,17 @@ export default function AdhikotProAdvanced() {
         setMatch(data);
       } else { setMatch(null); }
     });
+
+    // History Listener
+    const historyRef = ref(db, 'matchHistory');
+    onValue(historyRef, (snap) => {
+      setHistory(snap.val() || {});
+    });
   }, []);
 
   const triggerAnim = (txt) => { setAnim(txt); setTimeout(() => setAnim(""), 3000); };
 
   const handleScore = (runs, type = 'normal', outType = null) => {
-    // 1. STRICT OVER LIMIT GUARD - Agar overs pooray hain ya status break/finish hai, to score na barhe
     if (!match || match.status === 'Finished' || match.status === 'Innings Break') return;
     if (match.ov >= match.maxOv || match.wkts >= 10) return;
 
@@ -75,7 +82,6 @@ export default function AdhikotProAdvanced() {
     if (runs % 2 !== 0 && type !== 'wd') data.active = data.active === 1 ? 2 : 1;
     if (data.bl === 6) { data.ov += 1; data.bl = 0; data.bwr_o += 1; data.active = data.active === 1 ? 2 : 1; triggerAnim("OVER! 🔄"); }
     
-    // 2. DATABASE STATUS UPDATE LOGIC - Taake countless overs na hon aur 2nd Innings ka button show ho jaye
     if (data.innings === 2 && data.score >= data.target) {
       data.status = 'Finished';
     } else if (data.ov >= data.maxOv || data.wkts >= 10) {
@@ -103,7 +109,10 @@ export default function AdhikotProAdvanced() {
              <div style={s.avatar}>T</div>
              <div><b>Touqeer Iqbal</b><br/><small style={{color: isAdmin ? '#22c55e' : '#ef4444'}}>● {isAdmin ? 'ADMIN ACTIVE' : 'LIVE'}</small></div>
            </div>
-           <FaCog size={20} style={{opacity:0.5}} onClick={() => setShowAuth(true)} />
+           <div style={s.flex}>
+             <FaHistory size={20} style={{cursor:'pointer', color:'#facc15'}} onClick={() => setShowHistory(true)} />
+             <FaCog size={20} style={{opacity:0.5, marginLeft:'15px'}} onClick={() => setShowAuth(true)} />
+           </div>
       </div></div>
 
       {/* Admin Auth Modal */}
@@ -111,6 +120,32 @@ export default function AdhikotProAdvanced() {
         <div style={s.overlay} onClick={() => setShowAuth(false)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
             <input type="password" placeholder="ENTER PIN" style={s.pinInput} onChange={(e) => { if(e.target.value === "6545") { setIsAdmin(true); setShowAuth(false); }}} />
+          </div>
+        </div>
+      )}
+
+      {/* Match History Modal */}
+      {showHistory && (
+        <div style={s.overlay} onClick={() => setShowHistory(false)}>
+          <div style={s.modal} onClick={e => e.stopPropagation()}>
+            <div style={s.flexBetween}>
+                <h3 style={{color:'#facc15'}}>Match History</h3>
+                {isAdmin && <button onClick={() => remove(ref(db, 'matchHistory'))} style={{background:'none', border:'none', color:'#ef4444'}}><FaTrash/> Clear All</button>}
+            </div>
+            <div style={{maxHeight:'60vh', overflowY:'auto', marginTop:'15px'}}>
+                {Object.keys(history).length === 0 ? <p>No history found.</p> : 
+                 Object.entries(history).reverse().map(([id, m]) => (
+                    <div key={id} style={s.historyItem}>
+                        <div style={s.flexBetween}>
+                            <small>{m.date}</small>
+                            {isAdmin && <FaTrash color="#ef4444" onClick={() => remove(ref(db, `matchHistory/${id}`))} />}
+                        </div>
+                        <div style={{fontWeight:'bold'}}>{m.t1} vs {m.t2}</div>
+                        <div style={{color:'#facc15'}}>{m.score}/{m.wkts} ({m.ov}.{m.bl})</div>
+                    </div>
+                ))}
+            </div>
+            <button onClick={() => setShowHistory(false)} style={s.goldBtn}>CLOSE</button>
           </div>
         </div>
       )}
@@ -148,7 +183,6 @@ export default function AdhikotProAdvanced() {
             {match.target > 0 && <div style={s.targetBox}>Target: {match.target}</div>}
           </div>
 
-          {/* Batting/Bowling Stats */}
           <div style={s.playerCard}>
              {[match.s1, match.s2].map((p, i) => (
                 <div key={i} style={match.active === (i+1) ? s.activeP : s.pRow} onClick={() => isAdmin && setSelModal(i === 0 ? 's1' : 's2')}>
@@ -213,7 +247,7 @@ export default function AdhikotProAdvanced() {
       {isAdmin && selModal && (
         <div style={s.overlay} onClick={() => setSelModal(null)}><div style={s.modal} onClick={e => e.stopPropagation()}>
           <h3>Change Player</h3>
-          {(selModal === 'bwr' ? match.t2p : match.t1p).map((p, i) => (
+          {(selModal === 'bwr' ? (match.innings === 1 ? match.t2p : match.t1p) : (match.innings === 1 ? match.t1p : match.t2p)).map((p, i) => (
             <div key={i} style={s.pItem} onClick={() => {
                 const up = {};
                 if(selModal==='s1') up.s1 = {n:p, r:0, b:0, fours:0, sixes:0};
@@ -239,7 +273,7 @@ const s = {
   input: { width:'100%', padding:'10px', marginBottom:'10px', background:'#1e293b', border:'1px solid #334155', color:'white', borderRadius:'8px', boxSizing:'border-box' },
   area: { width:'100%', padding:'10px', height:'60px', background:'#1e293b', border:'1px solid #334155', color:'white', borderRadius:'8px', marginBottom:'10px' },
   flexGap: { display:'flex', gap:'10px' },
-  goldBtn: { width:'100%', padding:'15px', background:'#facc15', color:'black', fontWeight:'bold', border:'none', borderRadius:'8px' },
+  goldBtn: { width:'100%', padding:'15px', background:'#facc15', color:'black', fontWeight:'bold', border:'none', borderRadius:'8px', marginTop:'10px' },
   card: { background:'#0f172a', padding:'20px', borderRadius:'20px', textAlign:'center', margin:'10px', border:'1px solid #334155' },
   mainScore: { fontSize:'55px', fontWeight:'bold', color:'#facc15' },
   targetBox: { background:'#facc15', color:'black', padding:'5px 15px', borderRadius:'20px', fontWeight:'bold', marginTop:'10px', display:'inline-block' },
@@ -257,6 +291,7 @@ const s = {
   delBtn: { flex:1, padding:'12px', background:'#b91c1c', color:'white', borderRadius:'8px', fontWeight:'bold', border:'none' },
   overlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:5000 },
   modal: { background:'#1e293b', width:'85%', padding:'20px', borderRadius:'20px', textAlign:'center' },
+  historyItem: { background:'#0f172a', padding:'12px', borderRadius:'10px', marginBottom:'10px', textAlign:'left', borderLeft:'4px solid #facc15' },
   pItem: { width:'100%', padding:'12px', background:'#0f172a', color:'white', border:'none', borderBottom:'1px solid #334155', textAlign:'left' },
   bigAnim: { position:'fixed', top:'40%', left:'50%', transform:'translateX(-50%)', background:'#facc15', color:'black', padding:'15px 30px', borderRadius:'50px', fontWeight:'bold', zIndex:6000 },
   pinInput: { padding:'15px', background:'#0f172a', border:'2px solid #facc15', color:'white', borderRadius:'10px', textAlign:'center' }
