@@ -78,13 +78,16 @@ export default function AdhikotProAdvanced() {
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
+  // FIX: Ball and Over Logic without changing structure
   const handleScore = (runs, type = 'normal', outType = null) => {
     if (!match || match.status !== 'Live' || !isAdmin) return;
     setLastState({...match}); 
     let data = { ...match };
     let striker = data.active === 1 ? data.s1 : data.s2;
+
     if (type === 'normal') {
-      data.score += runs; data.bwr_r += runs; data.bl += 1;
+      data.score += runs; data.bwr_r += runs; 
+      data.bl += 1; // Increment ball
       striker.r = (parseInt(striker.r) || 0) + runs; striker.b += 1;
       if (runs === 4) { striker.fours += 1; triggerAnim("FOUR! ✨"); postCommentary(`${striker.n} hits a FOUR! ✨`); }
       else if (runs === 6) { striker.sixes += 1; triggerAnim("SIXER! 🚀"); postCommentary(`${striker.n} hits a massive SIX! 🚀`); }
@@ -99,28 +102,44 @@ export default function AdhikotProAdvanced() {
       triggerAnim(`NO BALL +${runs}`);
       postCommentary(`No Ball! ${striker.n} scores from the extra.`);
     }
+
     if (outType) {
       data.wkts += 1; data.bwr_w += (outType !== 'Run Out' ? 1 : 0);
-      if (type === 'normal') data.bl += 1;
+      if (type === 'normal') {
+         // Ball is already incremented above, no need to add again
+      } else {
+         // If out on extra (rare but for structure), handle here
+      }
       const outName = striker.n;
       striker.r = `OUT (${outType})`;
       triggerAnim(`WICKET! (${outType}) ☝️`);
       postCommentary(`WICKET! ${outName} is OUT by ${outType}. ☝️`);
       if (data.wkts < 10) setTimeout(() => setSelModal(data.active === 1 ? 's1' : 's2'), 500);
     }
+
+    // Rotate strike
     if (runs % 2 !== 0 && type !== 'wd') data.active = data.active === 1 ? 2 : 1;
+
+    // OVER CHANGE SYSTEM
     if (data.bl === 6) { 
-      data.ov += 1; data.bl = 0; data.bwr_o += 1; data.active = data.active === 1 ? 2 : 1; 
+      data.ov += 1; 
+      data.bl = 0; 
+      data.bwr_o += 1; 
+      data.active = data.active === 1 ? 2 : 1; // Auto rotate on over end
       triggerAnim("OVER! 🔄");
       postCommentary(`End of over ${data.ov}. Score: ${data.score}/${data.wkts}`);
-      if (data.ov < data.maxOv) setTimeout(() => setSelModal('bwr'), 600);
+      if (data.ov < data.maxOv && data.wkts < 10) {
+        setTimeout(() => setSelModal('bwr'), 600); // Trigger New Bowler Modal
+      }
     }
+
     if (data.innings === 2 && data.score >= data.target) {
       data.status = 'Finished';
       data.winner = data.batTeam;
     } else if (data.ov >= data.maxOv || data.wkts >= 10) {
       data.status = data.innings === 1 ? 'Innings Break' : 'Finished';
     }
+
     update(ref(db, 'liveMatch'), data);
     setExtraModal(null); setWktModal(false);
   };
@@ -187,7 +206,6 @@ export default function AdhikotProAdvanced() {
            </div>
       </div></div>
 
-      {/* IMPROVEMENT: Added Active button feedback via global CSS */}
       <style>{`
         .blink { animation: blinker 1.5s linear infinite; }
         @keyframes blinker { 50% { opacity: 0.3; } }
@@ -275,7 +293,6 @@ export default function AdhikotProAdvanced() {
                  <h2 style={{color:'#facc15', margin:'5px 0'}}>MATCH SUMMARY</h2>
                  <p style={{opacity:0.8}}>{match.batTeam} vs {match.bowlTeam}</p>
                  <div style={s.divider}></div>
-                 {/* IMPROVEMENT: Score Color turns Golden when Finished */}
                  <div style={s.flexBetween}><span>Final Score:</span> <b style={{color:'#facc15', fontSize:'20px'}}>{match.score}/{match.wkts}</b></div>
                  <div style={s.flexBetween}><span>Overs:</span> <b>{match.ov}.{match.bl}</b></div>
                  <div style={s.divider}></div>
@@ -295,7 +312,6 @@ export default function AdhikotProAdvanced() {
             )}
           </div>
 
-          {/* IMPROVEMENT: Flex Direction for Commentary so Newest is always on top */}
           <div style={{...s.commBox, display:'flex', flexDirection:'column'}}>
             <div style={{color:'#facc15', fontSize:'12px', marginBottom:'5px', fontWeight:'bold'}}><FaCommentDots/> LIVE COMMENTARY</div>
             <div style={{display:'flex', flexDirection:'column'}}>
