@@ -22,7 +22,7 @@ export default function AdhikotProAdvanced() {
   const [wktModal, setWktModal] = useState(false);
   const [anim, setAnim] = useState("");
   const [lastState, setLastState] = useState(null); 
-  const [commInput, setCommInput] = useState(""); // State for commentary input
+  const [commInput, setCommInput] = useState(""); 
 
   useEffect(() => {
     const matchRef = ref(db, 'liveMatch');
@@ -51,10 +51,9 @@ export default function AdhikotProAdvanced() {
 
   const triggerAnim = (txt) => { setAnim(txt); setTimeout(() => setAnim(""), 3000); };
 
-  // New function to post commentary
   const postCommentary = (text) => {
     if (!text || !match) return;
-    const newComm = [text, ...(match.commentary || [])].slice(0, 5); // Keep last 5 entries
+    const newComm = [text, ...(match.commentary || [])].slice(0, 5); 
     update(ref(db, 'liveMatch'), { commentary: newComm });
     setCommInput("");
   };
@@ -74,47 +73,54 @@ export default function AdhikotProAdvanced() {
     let data = { ...match };
     let striker = data.active === 1 ? data.s1 : data.s2;
 
+    // Ball valid hai ya nahi (Wide/NB par over nahi barhta)
+    const isLegalBall = (type === 'normal');
+
     if (type === 'normal') {
       data.score += runs; data.bwr_r += runs; data.bl += 1;
       striker.r = (parseInt(striker.r) || 0) + runs; striker.b += 1;
       if (runs === 4) { striker.fours += 1; triggerAnim("FOUR! ✨"); postCommentary(`${striker.n} hits a FOUR! ✨`); }
-      if (runs === 6) { striker.sixes += 1; triggerAnim("SIXER! 🚀"); postCommentary(`${striker.n} hits a massive SIX! 🚀`); }
+      else if (runs === 6) { striker.sixes += 1; triggerAnim("SIXER! 🚀"); postCommentary(`${striker.n} hits a massive SIX! 🚀`); }
+      else { postCommentary(`${striker.n} scores ${runs} run(s)`); }
     } else if (type === 'wd') {
       data.score += (1 + runs); data.bwr_r += (1 + runs);
       triggerAnim(`WIDE +${runs}`);
-      postCommentary(`Wide ball +${runs} extra runs.`);
+      postCommentary(`Wide ball. +${1+runs} extra runs added.`);
     } else if (type === 'nb') {
       data.score += (1 + runs); data.bwr_r += (1 + runs);
       striker.r = (parseInt(striker.r) || 0) + runs; striker.b += 1;
       triggerAnim(`NO BALL +${runs}`);
-      postCommentary(`No Ball! ${striker.n} gets +${runs} runs.`);
+      postCommentary(`No Ball! ${striker.n} scores from the extra.`);
     }
 
     if (outType) {
       data.wkts += 1; data.bwr_w += (outType !== 'Run Out' ? 1 : 0);
-      if (type === 'normal') data.bl += 1;
+      if (isLegalBall) data.bl += 1;
       const outName = striker.n;
       striker.r = `OUT (${outType})`;
       triggerAnim(`WICKET! (${outType}) ☝️`);
-      postCommentary(`WICKET! ${outName} is OUT (${outType}). ☝️`);
+      postCommentary(`WICKET! ${outName} is OUT by ${outType}. ☝️`);
       setTimeout(() => setSelModal(data.active === 1 ? 's1' : 's2'), 500);
     }
 
+    // Strike rotation logic
     if (runs % 2 !== 0 && type !== 'wd') data.active = data.active === 1 ? 2 : 1;
     
+    // Over Completion Logic
     if (data.bl === 6) { 
-      data.ov += 1; data.bl = 0; data.bwr_o += 1; data.active = data.active === 1 ? 2 : 1; 
+      data.ov += 1; data.bl = 0; data.bwr_o += 1; 
+      data.active = data.active === 1 ? 2 : 1; // End of over strike rotation
       triggerAnim("OVER! 🔄");
-      postCommentary(`End of over ${data.ov}. Score: ${data.score}/${data.wkts}`);
+      postCommentary(`End of over ${data.ov}. Score is ${data.score} for ${data.wkts}`);
       setTimeout(() => setSelModal('bwr'), 600);
     }
     
     if (data.innings === 2 && data.score >= data.target) {
       data.status = 'Finished';
-      postCommentary(`Match Finished! ${data.batTeam} won the match! 🏆`);
+      postCommentary(`Match Finished! ${data.batTeam} won! 🏆`);
     } else if (data.ov >= data.maxOv || data.wkts >= 10) {
       data.status = data.innings === 1 ? 'Innings Break' : 'Finished';
-      if(data.status === 'Finished') postCommentary(`Match Finished! ${data.score < data.target - 1 ? data.bowlTeam : 'Tie'} won!`);
+      if(data.status === 'Finished') postCommentary(`Match Finished! ${data.score < data.target - 1 ? data.bowlTeam : 'Tie'}`);
     }
 
     update(ref(db, 'liveMatch'), data);
@@ -251,7 +257,6 @@ export default function AdhikotProAdvanced() {
             )}
           </div>
 
-          {/* Commentary Feed Display */}
           <div style={s.commBox}>
             <div style={{color:'#facc15', fontSize:'12px', marginBottom:'5px', fontWeight:'bold'}}><FaCommentDots/> LIVE COMMENTARY</div>
             {match.commentary?.map((c, i) => (
@@ -289,7 +294,6 @@ export default function AdhikotProAdvanced() {
                   <button onClick={()=>setExtraModal('nb')} style={s.nbBtn}>NB+</button>
                   <button onClick={()=>setWktModal(true)} style={s.wktBtn}>OUT</button>
                   
-                  {/* Manual Commentary Input Row */}
                   <div style={{gridColumn:'span 2', display:'flex', gap:'5px'}}>
                     <input value={commInput} onChange={e=>setCommInput(e.target.value)} placeholder="Write commentary..." style={s.commInput} />
                     <button onClick={()=>postCommentary(commInput)} style={s.postBtn}><FaPaperPlane/></button>
@@ -316,7 +320,6 @@ export default function AdhikotProAdvanced() {
         </div>
       )}
 
-      {/* Modals remain same */}
       {extraModal && (
         <div style={s.overlay}><div style={s.modal}>
           <h3>{extraModal === 'wd' ? 'Wide' : 'No Ball'} Options</h3>
