@@ -14,11 +14,11 @@ const db = getDatabase(app);
 export default function AdhikotProAdvanced() {
   const [match, setMatch] = useState(null);
   const [history, setHistory] = useState({});
-  const [promo, setPromo] = useState({}); // NAYA STATE PROMOTION KE LIYE
+  const [promo, setPromo] = useState({});
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [showPromoModal, setShowPromoModal] = useState(false); // PROMO MODAL
+  const [showPromoModal, setShowPromoModal] = useState(false);
   const [selModal, setSelModal] = useState(null);
   const [extraModal, setExtraModal] = useState(null);
   const [wktModal, setWktModal] = useState(false);
@@ -51,7 +51,6 @@ export default function AdhikotProAdvanced() {
       setHistory(snap.val() || {});
     });
 
-    // NAYA FIREBASE CONNECTION PROMO KE LIYE (Main structure se alag)
     const promoRef = ref(db, 'appSettings/promo');
     onValue(promoRef, (snap) => {
       setPromo(snap.val() || {});
@@ -92,6 +91,11 @@ export default function AdhikotProAdvanced() {
     setLastState({...match}); 
     let data = { ...match };
     let striker = data.active === 1 ? data.s1 : data.s2;
+
+    // --- RECENT BALLS LOGIC (SAFE ADDITION) ---
+    const ballLabel = outType ? 'W' : (type === 'wd' ? 'Wd' : (type === 'nb' ? 'Nb' : runs));
+    data.recentBalls = [ballLabel, ...(data.recentBalls || [])].slice(0, 12);
+    // ------------------------------------------
 
     if (type === 'normal') {
       data.score += runs; data.bwr_r += runs; 
@@ -216,7 +220,6 @@ export default function AdhikotProAdvanced() {
         </button>
       </div>
 
-      {/* EYE-CATCHING PROMOTIONAL BANNER */}
       {(promo.text || promo.img) && (
         <div 
           style={{...s.promoContainer, cursor: promo.link ? 'pointer' : 'default'}} 
@@ -247,15 +250,14 @@ export default function AdhikotProAdvanced() {
         </div>
       )}
 
-      {/* PROMO SETUP MODAL (ADMIN ONLY) */}
       {isAdmin && showPromoModal && (
         <div style={s.overlay} onClick={() => setShowPromoModal(false)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
             <h3 style={{color:'#facc15', marginBottom: '15px'}}><FaBullhorn/> Promotion Setup</h3>
             <p style={{fontSize: '12px', opacity: 0.7, marginBottom:'10px'}}>Khali chhorne par ad hide ho jayega.</p>
-            <input id="pText" placeholder="Scrolling Text (e.g. Sponsored by...)" defaultValue={promo.text || ''} style={s.input} />
-            <input id="pImg" placeholder="Poster Image URL (Optional)" defaultValue={promo.img || ''} style={s.input} />
-            <input id="pLink" placeholder="Click Link (WhatsApp/Website)" defaultValue={promo.link || ''} style={s.input} />
+            <input id="pText" placeholder="Scrolling Text" defaultValue={promo.text || ''} style={s.input} />
+            <input id="pImg" placeholder="Poster Image URL" defaultValue={promo.img || ''} style={s.input} />
+            <input id="pLink" placeholder="Click Link" defaultValue={promo.link || ''} style={s.input} />
             <button onClick={() => {
               update(ref(db, 'appSettings/promo'), {
                 text: document.getElementById('pText').value,
@@ -309,7 +311,8 @@ export default function AdhikotProAdvanced() {
                   bowlTeam: fd.get('batFirst') === 'T1' ? fd.get('t2') : fd.get('t1'),
                   s1: {n: 'Striker', r: 0, b: 0, fours: 0, sixes: 0}, s2: {n: 'Non-Striker', r: 0, b: 0, fours: 0, sixes: 0}, 
                   active: 1, score: 0, wkts: 0, ov: 0, bl: 0, innings: 1, status: 'Live', bwr: 'Bowler', bwr_r:0, bwr_w:0, bwr_o:0,
-                  commentary: ["Match Started! Welcome to Adhikot Cricket Pro."]
+                  commentary: ["Match Started! Welcome to Adhikot Cricket Pro."],
+                  recentBalls: []
                 });
               }}>
                 <input name="lg" placeholder="League Name" style={s.input} required />
@@ -325,8 +328,6 @@ export default function AdhikotProAdvanced() {
                 <textarea name="t1p" placeholder="Team A Players" style={s.area}/><textarea name="t2p" placeholder="Team B Players" style={s.area}/>
                 <div style={s.flexGap}><input name="max" placeholder="Overs" type="number" style={s.input}/><button type="submit" style={s.goldBtn}>START LIVE</button></div>
               </form>
-              
-              {/* ADMIN PROMO BUTTON - Setup Screen */}
               <button onClick={() => setShowPromoModal(true)} style={{...s.saveBtn, background: '#a855f7', marginTop: '15px'}}><FaBullhorn/> MANAGE PROMOTION ADS</button>
             </>
           ) : (
@@ -355,6 +356,23 @@ export default function AdhikotProAdvanced() {
                 <div style={{fontSize:'16px', fontWeight:'bold', opacity: 0.8}}>{match.batTeam} vs {match.bowlTeam}</div>
                 <div style={s.mainScore}>{match.score}/{match.wkts}</div>
                 <div style={s.overInfo}>Overs: {match.ov}.{match.bl} / {match.maxOv}</div>
+                
+                {/* --- RECENT BALLS UI (SAFE ADDITION) --- */}
+                {match.recentBalls && (
+                  <div style={s.recentBallsRow}>
+                    {match.recentBalls.map((ball, i) => (
+                      <div key={i} style={{
+                        ...s.ballCircle,
+                        background: ball === 'W' ? '#ef4444' : (ball === 4 || ball === 6) ? '#22c55e' : '#334155',
+                        border: (ball === 4 || ball === 6 || ball === 'W') ? 'none' : '1px solid #475569'
+                      }}>
+                        {ball}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* --------------------------------------- */}
+
                 <div style={{display:'flex', justifyContent:'center', gap:'15px', marginTop:'10px'}}>
                    <div style={s.rateBadge}>CRR: {rates.crr}</div>
                    {match.innings === 2 && <div style={{...s.rateBadge, background:'#ef4444'}}>RRR: {rates.rrr}</div>}
@@ -413,12 +431,9 @@ export default function AdhikotProAdvanced() {
               )}
               <div style={{gridColumn:'span 3', display:'flex', flexDirection:'column', gap:'10px', marginTop:'10px'}}>
                 {match.status === 'Innings Break' && (
-                  <button onClick={() => update(ref(db, 'liveMatch'), {innings: 2, score: 0, wkts: 0, ov: 0, bl: 0, target: match.score + 1, status: 'Live', batTeam: match.bowlTeam, bowlTeam: match.batTeam, bwr_r:0, bwr_w:0, bwr_o:0, bwr:'Bowler', commentary: ["Second Innings Started!"]})} style={s.saveBtn}>START 2ND INNINGS</button>
+                  <button onClick={() => update(ref(db, 'liveMatch'), {innings: 2, score: 0, wkts: 0, ov: 0, bl: 0, target: match.score + 1, status: 'Live', batTeam: match.bowlTeam, bowlTeam: match.batTeam, bwr_r:0, bwr_w:0, bwr_o:0, bwr:'Bowler', commentary: ["Second Innings Started!"], recentBalls: []})} style={s.saveBtn}>START 2ND INNINGS</button>
                 )}
-                
-                {/* ADMIN PROMO BUTTON - Live Match Screen */}
                 <button onClick={() => setShowPromoModal(true)} style={{...s.saveBtn, background: '#a855f7'}}><FaBullhorn/> MANAGE PROMOTION</button>
-                
                 <button onClick={saveMatchToHistory} style={s.saveBtn}><FaSave/> SAVE TO HISTORY</button>
                 {(match.status === 'Finished' || match.status === 'Innings Break') && (
                   <button onClick={closeMatch} style={s.delBtn}><FaTimes/> CLOSE MATCH</button>
@@ -439,14 +454,11 @@ export default function AdhikotProAdvanced() {
 const s = {
   container: { background: '#020617', minHeight: '100vh', color: 'white', fontFamily: 'sans-serif' },
   header: { background:'#0f172a', padding:'15px', borderBottom:'1px solid #1e293b', marginBottom: '5px' },
-  interBtn: { width: '100%', padding: '12px', background: 'linear-gradient(90deg, #1e293b, #334155)', color: '#facc15', border: '1px solid #facc15', borderRadius: '12px', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 15px rgba(250, 204, 21, 0.1)' },
-  
-  // NEW STYLES FOR PROMO BANNER
-  promoContainer: { margin: '0 15px 10px 15px', background: 'linear-gradient(45deg, #1e293b, #0f172a)', border: '1px solid #facc15', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 10px rgba(250, 204, 21, 0.2)' },
+  interBtn: { width: '100%', padding: '12px', background: 'linear-gradient(90deg, #1e293b, #334155)', color: '#facc15', border: '1px solid #facc15', borderRadius: '12px', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
+  promoContainer: { margin: '0 15px 10px 15px', background: 'linear-gradient(45deg, #1e293b, #0f172a)', border: '1px solid #facc15', borderRadius: '12px', overflow: 'hidden' },
   promoImg: { width: '100%', maxHeight: '180px', objectFit: 'cover', display: 'block' },
   marqueeWrap: { padding: '10px', background: 'rgba(250, 204, 21, 0.1)', overflow: 'hidden', width: '100%' },
   promoText: { color: '#facc15', fontWeight: 'bold', fontSize: '15px' },
-  
   flex: { display:'flex', alignItems:'center', gap:'10px' },
   flexBetween: { display:'flex', alignItems:'center', justifyContent:'space-between' },
   avatar: { width:'35px', height:'35px', background:'#facc15', borderRadius:'50%', color:'black', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold' },
@@ -458,6 +470,12 @@ const s = {
   goldBtn: { width:'100%', padding:'15px', background:'#facc15', color:'black', fontWeight:'bold', border:'none', borderRadius:'8px' },
   card: { background:'#0f172a', padding:'20px', borderRadius:'20px', textAlign:'center', margin:'10px', border:'1px solid #334155' },
   mainScore: { fontSize:'55px', fontWeight:'bold', color:'#facc15' },
+  overInfo: { fontSize:'18px', opacity:0.8, marginBottom: '5px' },
+  
+  // NEW STYLES FOR RECENT BALLS
+  recentBallsRow: { display:'flex', gap:'6px', justifyContent:'center', margin:'12px 0', flexWrap:'wrap' },
+  ballCircle: { width:'28px', height:'28px', borderRadius:'50%', fontSize:'11px', display:'flex', alignItems:'center', justifyContent:'center', fontWeight: 'bold', color: 'white' },
+  
   commBox: { background:'#0f172a', margin:'10px', padding:'15px', borderRadius:'15px', border:'1px solid #1e293b' },
   commItem: { fontSize:'13px', padding:'6px 0', borderBottom:'1px solid #1e293b', display:'flex', alignItems:'center', gap:'8px' },
   newDot: { width:'6px', height:'6px', background:'#facc15', borderRadius:'50%', display:'inline-block' },
@@ -484,7 +502,6 @@ const s = {
   pItem: { width:'100%', padding:'12px', background:'#0f172a', color:'white', border:'none', borderBottom:'1px solid #334155', textAlign:'left' },
   bigAnim: { position:'fixed', top:'40%', left:'50%', transform:'translateX(-50%)', background:'#facc15', color:'black', padding:'15px 30px', borderRadius:'50px', fontWeight:'bold', zIndex:6000 },
   pinInput: { padding:'15px', background:'#0f172a', border:'2px solid #facc15', color:'white', borderRadius:'10px', textAlign:'center' },
-  overInfo: { fontSize:'18px', opacity:0.8 },
   fullScoreboard: { padding: '10px' },
   rateBadge: { background:'#1e293b', color:'#facc15', padding:'4px 10px', borderRadius:'5px', fontSize:'12px', border:'1px solid #334155', fontWeight:'bold' }
 };
