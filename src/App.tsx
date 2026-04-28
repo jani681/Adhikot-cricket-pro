@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps } from "firebase/app";
 import { getDatabase, ref, set, onValue, update, remove, push } from "firebase/database";
-import { FaWhatsapp, FaSyncAlt, FaUserShield, FaTrophy, FaTrash, FaSave, FaPlay, FaCog, FaTimes, FaHistory, FaEdit, FaCommentDots, FaPaperPlane, FaGlobe } from 'react-icons/fa';
+import { FaWhatsapp, FaSyncAlt, FaUserShield, FaTrophy, FaTrash, FaSave, FaPlay, FaCog, FaTimes, FaHistory, FaEdit, FaCommentDots, FaPaperPlane, FaGlobe, FaBullhorn } from 'react-icons/fa';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB0e37uvyY7Jpuj-FYxDlX52hjb0uwsBfg",
@@ -14,9 +14,11 @@ const db = getDatabase(app);
 export default function AdhikotProAdvanced() {
   const [match, setMatch] = useState(null);
   const [history, setHistory] = useState({});
+  const [promo, setPromo] = useState({}); // NAYA STATE PROMOTION KE LIYE
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showPromoModal, setShowPromoModal] = useState(false); // PROMO MODAL
   const [selModal, setSelModal] = useState(null);
   const [extraModal, setExtraModal] = useState(null);
   const [wktModal, setWktModal] = useState(false);
@@ -48,6 +50,13 @@ export default function AdhikotProAdvanced() {
     onValue(historyRef, (snap) => {
       setHistory(snap.val() || {});
     });
+
+    // NAYA FIREBASE CONNECTION PROMO KE LIYE (Main structure se alag)
+    const promoRef = ref(db, 'appSettings/promo');
+    onValue(promoRef, (snap) => {
+      setPromo(snap.val() || {});
+    });
+
   }, []);
 
   const triggerAnim = (txt) => { setAnim(txt); setTimeout(() => setAnim(""), 3000); };
@@ -198,7 +207,6 @@ export default function AdhikotProAdvanced() {
            </div>
       </div></div>
 
-      {/* FIXED: Button placed outside match logic to show for everyone always */}
       <div style={{padding: '0 15px', marginBottom: '10px'}}>
         <button 
           onClick={() => window.open('https://www.cricbuzz.com/cricket-match/live-scores', '_blank')}
@@ -208,9 +216,26 @@ export default function AdhikotProAdvanced() {
         </button>
       </div>
 
+      {/* EYE-CATCHING PROMOTIONAL BANNER */}
+      {(promo.text || promo.img) && (
+        <div 
+          style={{...s.promoContainer, cursor: promo.link ? 'pointer' : 'default'}} 
+          onClick={() => promo.link && window.open(promo.link, '_blank')}
+        >
+          {promo.img && <img src={promo.img} alt="Sponsor" style={s.promoImg} />}
+          {promo.text && (
+            <div style={s.marqueeWrap}>
+              <div className="marquee-content" style={s.promoText}>⭐ {promo.text} ⭐</div>
+            </div>
+          )}
+        </div>
+      )}
+
       <style>{`
         .blink { animation: blinker 1.5s linear infinite; }
         @keyframes blinker { 50% { opacity: 0.3; } }
+        @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+        .marquee-content { display: inline-block; white-space: nowrap; animation: marquee 12s linear infinite; }
         button:active { transform: scale(0.95); opacity: 0.8; }
       `}</style>
 
@@ -218,6 +243,29 @@ export default function AdhikotProAdvanced() {
         <div style={s.overlay} onClick={() => setShowAuth(false)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
             <input type="password" placeholder="ENTER PIN" style={s.pinInput} autoFocus onChange={(e) => { if(e.target.value === "6545") { setIsAdmin(true); setShowAuth(false); }}} />
+          </div>
+        </div>
+      )}
+
+      {/* PROMO SETUP MODAL (ADMIN ONLY) */}
+      {isAdmin && showPromoModal && (
+        <div style={s.overlay} onClick={() => setShowPromoModal(false)}>
+          <div style={s.modal} onClick={e => e.stopPropagation()}>
+            <h3 style={{color:'#facc15', marginBottom: '15px'}}><FaBullhorn/> Promotion Setup</h3>
+            <p style={{fontSize: '12px', opacity: 0.7, marginBottom:'10px'}}>Khali chhorne par ad hide ho jayega.</p>
+            <input id="pText" placeholder="Scrolling Text (e.g. Sponsored by...)" defaultValue={promo.text || ''} style={s.input} />
+            <input id="pImg" placeholder="Poster Image URL (Optional)" defaultValue={promo.img || ''} style={s.input} />
+            <input id="pLink" placeholder="Click Link (WhatsApp/Website)" defaultValue={promo.link || ''} style={s.input} />
+            <button onClick={() => {
+              update(ref(db, 'appSettings/promo'), {
+                text: document.getElementById('pText').value,
+                img: document.getElementById('pImg').value,
+                link: document.getElementById('pLink').value
+              });
+              setShowPromoModal(false);
+              alert("Promotion Updated!");
+            }} style={{...s.goldBtn, marginTop: '10px'}}>UPDATE BANNER</button>
+            <button onClick={() => setShowPromoModal(false)} style={{...s.delBtn, marginTop: '10px'}}>CANCEL</button>
           </div>
         </div>
       )}
@@ -277,6 +325,9 @@ export default function AdhikotProAdvanced() {
                 <textarea name="t1p" placeholder="Team A Players" style={s.area}/><textarea name="t2p" placeholder="Team B Players" style={s.area}/>
                 <div style={s.flexGap}><input name="max" placeholder="Overs" type="number" style={s.input}/><button type="submit" style={s.goldBtn}>START LIVE</button></div>
               </form>
+              
+              {/* ADMIN PROMO BUTTON - Setup Screen */}
+              <button onClick={() => setShowPromoModal(true)} style={{...s.saveBtn, background: '#a855f7', marginTop: '15px'}}><FaBullhorn/> MANAGE PROMOTION ADS</button>
             </>
           ) : (
             <div style={{textAlign:'center', padding:'40px 20px'}}>
@@ -364,6 +415,10 @@ export default function AdhikotProAdvanced() {
                 {match.status === 'Innings Break' && (
                   <button onClick={() => update(ref(db, 'liveMatch'), {innings: 2, score: 0, wkts: 0, ov: 0, bl: 0, target: match.score + 1, status: 'Live', batTeam: match.bowlTeam, bowlTeam: match.batTeam, bwr_r:0, bwr_w:0, bwr_o:0, bwr:'Bowler', commentary: ["Second Innings Started!"]})} style={s.saveBtn}>START 2ND INNINGS</button>
                 )}
+                
+                {/* ADMIN PROMO BUTTON - Live Match Screen */}
+                <button onClick={() => setShowPromoModal(true)} style={{...s.saveBtn, background: '#a855f7'}}><FaBullhorn/> MANAGE PROMOTION</button>
+                
                 <button onClick={saveMatchToHistory} style={s.saveBtn}><FaSave/> SAVE TO HISTORY</button>
                 {(match.status === 'Finished' || match.status === 'Innings Break') && (
                   <button onClick={closeMatch} style={s.delBtn}><FaTimes/> CLOSE MATCH</button>
@@ -385,6 +440,13 @@ const s = {
   container: { background: '#020617', minHeight: '100vh', color: 'white', fontFamily: 'sans-serif' },
   header: { background:'#0f172a', padding:'15px', borderBottom:'1px solid #1e293b', marginBottom: '5px' },
   interBtn: { width: '100%', padding: '12px', background: 'linear-gradient(90deg, #1e293b, #334155)', color: '#facc15', border: '1px solid #facc15', borderRadius: '12px', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 15px rgba(250, 204, 21, 0.1)' },
+  
+  // NEW STYLES FOR PROMO BANNER
+  promoContainer: { margin: '0 15px 10px 15px', background: 'linear-gradient(45deg, #1e293b, #0f172a)', border: '1px solid #facc15', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 10px rgba(250, 204, 21, 0.2)' },
+  promoImg: { width: '100%', maxHeight: '180px', objectFit: 'cover', display: 'block' },
+  marqueeWrap: { padding: '10px', background: 'rgba(250, 204, 21, 0.1)', overflow: 'hidden', width: '100%' },
+  promoText: { color: '#facc15', fontWeight: 'bold', fontSize: '15px' },
+  
   flex: { display:'flex', alignItems:'center', gap:'10px' },
   flexBetween: { display:'flex', alignItems:'center', justifyContent:'space-between' },
   avatar: { width:'35px', height:'35px', background:'#facc15', borderRadius:'50%', color:'black', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold' },
