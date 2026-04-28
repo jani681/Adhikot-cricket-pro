@@ -134,7 +134,7 @@ export default function AdhikotProUltra() {
     <div style={s.container}>
       {anim && <div style={s.bigAnim}>{anim}</div>}
       
-      {/* Header & Promo Bar - SAME AS BEFORE */}
+      {/* Header & Promo Bar */}
       <div style={s.header}><div style={s.flexBetween}>
            <div style={s.flex} onClick={() => setShowAuth(true)}>
              <div style={s.avatar}>T</div>
@@ -150,7 +150,7 @@ export default function AdhikotProUltra() {
         </div>
       )}
 
-      {/* Main Scorecard - SAME UI */}
+      {/* Main Scorecard */}
       {match && (
         <div style={{padding:'10px'}}>
           <div style={s.card}>
@@ -165,7 +165,7 @@ export default function AdhikotProUltra() {
             <button onClick={() => setShowFullCard(true)} style={s.viewFullBtn}><FaListAlt/> VIEW FULL SCORECARD</button>
           </div>
 
-          {/* Current Batsmen & Bowler - NEW: Individual Bowler Display */}
+          {/* Current Batsmen & Bowler */}
           <div style={s.playerCard}>
              {[match.s1, match.s2].map((p, i) => (
                 <div key={i} style={match.active === (i+1) ? s.activeP : s.pRow}>
@@ -182,7 +182,7 @@ export default function AdhikotProUltra() {
              </div>
           </div>
 
-          {/* Admin Controls - SAME AS BEFORE */}
+          {/* Admin Controls */}
           {isAdmin && match.status === 'Live' && (
             <div style={s.adminGrid}>
                {[0,1,2,3,4,6].map(r => <button key={r} onClick={()=>handleScore(r)} style={s.numBtn}>{r}</button>)}
@@ -195,7 +195,7 @@ export default function AdhikotProUltra() {
         </div>
       )}
 
-      {/* FULL SCORECARD MODAL - The New "Pro" Feature */}
+      {/* FULL SCORECARD MODAL */}
       {showFullCard && match && (
         <div style={s.overlay} onClick={() => setShowFullCard(false)}>
           <div id="full-scorecard-modal" style={{...s.modal, width:'95%', maxHeight:'90vh', overflowY:'auto'}} onClick={e => e.stopPropagation()}>
@@ -235,7 +235,7 @@ export default function AdhikotProUltra() {
         </div>
       )}
 
-      {/* Auth, History, Promo Modals - SAME AS BEFORE BUT MAINTAINED */}
+      {/* Auth Modal */}
       {showAuth && !isAdmin && (
         <div style={s.overlay} onClick={() => setShowAuth(false)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
@@ -267,7 +267,7 @@ export default function AdhikotProUltra() {
         @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
       `}</style>
 
-      {/* Select Modals - For new Batsman/Bowler */}
+      {/* Select Modals */}
       {isAdmin && selModal && (
         <div style={s.overlay} onClick={() => setSelModal(null)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
